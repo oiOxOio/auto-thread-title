@@ -1,0 +1,7 @@
+interface:
+  display_name: "手动整理对话标题"
+  short_description: "按固定模板安全重命名单个已有 Codex 项目对话标题，不改动其他信息"
+  default_prompt: "使用 $rename-task-title 按固定模板修改这个链接任务的标题。"
+
+policy:
+  allow_implicit_invocation: true

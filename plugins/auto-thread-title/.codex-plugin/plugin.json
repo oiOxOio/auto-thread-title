@@ -1,0 +1,23 @@
+{
+  "name": "auto-thread-title",
+  "version": "0.1.0+codex.20260904095624",
+  "description": "Automatically normalizes new Codex project task titles and safely renames one linked existing task on request.",
+  "author": {
+    "name": "Why.Ping"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "\u81ea\u52a8\u5bf9\u8bdd\u6807\u9898",
+    "shortDescription": "\u81ea\u52a8\u6574\u7406\u65b0\u5bf9\u8bdd\uff0c\u4e5f\u53ef\u6309\u56fa\u5b9a\u89c4\u5219\u624b\u52a8\u6574\u7406\u65e7\u5bf9\u8bdd\u3002",
+    "longDescription": "\u5728\u65b0\u5efa Codex \u9879\u76ee\u5bf9\u8bdd\u7684\u9996\u8f6e\u4e2d\u81ea\u52a8\u89c4\u8303\u6807\u9898\uff1b\u4e5f\u53ef\u901a\u8fc7\u624b\u52a8\u6280\u80fd\u5bf9\u5355\u4e2a\u94fe\u63a5\u4efb\u52a1\u6267\u884c\u540c\u6837\u7684\u56fa\u5b9a\u547d\u540d\u89c4\u5219\u3002\u4e0d\u8f6e\u8be2\uff0c\u4e0d\u626b\u63cf\u5176\u4ed6\u5bf9\u8bdd\uff0c\u4e5f\u4e0d\u542f\u52a8\u989d\u5916\u6a21\u578b\u4efb\u52a1\u3002",
+    "developerName": "Why.Ping",
+    "category": "Productivity",
+    "capabilities": [
+      "Write"
+    ],
+    "defaultPrompt": [
+      "\u4f7f\u7528 $rename-task-title \u6309\u56fa\u5b9a\u6a21\u677f\u4fee\u6539\u8fd9\u4e2a\u94fe\u63a5\u4efb\u52a1\u7684\u6807\u9898\u3002",
+      "\u68c0\u67e5\u81ea\u52a8\u5bf9\u8bdd\u6807\u9898\u63d2\u4ef6\u7684\u72b6\u6001\u4e0e\u56fa\u5b9a\u89c4\u5219\u3002"
+    ]
+  }
+}
