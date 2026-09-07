@@ -9,7 +9,9 @@ import test from 'node:test';
 const pluginRoot = fileURLToPath(new URL('../', import.meta.url));
 const isWindows = process.platform === 'win32';
 const powerShell = isWindows ? 'powershell.exe' : 'pwsh';
-const hasPowerShell = spawnSync(powerShell, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { timeout: 5000 }).status === 0;
+// Windows PowerShell is a required launcher, not an optional test capability.
+// Never silently skip Windows coverage because a busy CI worker starts slowly.
+const hasPowerShell = isWindows || spawnSync(powerShell, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { timeout: 5000 }).status === 0;
 
 function fixture(t) {
   const root = mkdtempSync(path.join(tmpdir(), "auto-title launch 中文 $;()' "));
@@ -36,7 +38,7 @@ function invoke(f, shell, args, input = Buffer.from('')) {
     ? [path.join(f.root, 'scripts', 'run.sh'), ...args]
     : ['-NoProfile', '-NonInteractive', '-File', path.join(f.root, 'scripts', 'run.ps1'), ...args];
   const result = spawnSync(shell === 'sh' ? '/bin/sh' : powerShell, launcherArgs, {
-    env: f.env, input, encoding: 'utf8', timeout: 10000,
+    env: f.env, input, encoding: 'utf8', timeout: 20000,
   });
   assert.ifError(result.error);
   return result;
@@ -138,7 +140,7 @@ test('POSIX: original hook command safely resolves PLUGIN_ROOT with spaces and s
   f.env.PLUGIN_ROOT = f.root;
   const hook = JSON.parse(readFileSync(path.join(pluginRoot, 'hooks', 'hooks.json'), 'utf8')).hooks.SessionStart[0].hooks[0];
   const payload = Buffer.from('{"cwd":"/Users/中文/project","source":"startup"}\n');
-  const result = spawnSync('sh', ['-c', hook.command], { env: f.env, input: payload, encoding: 'utf8', timeout: 10000 });
+  const result = spawnSync('sh', ['-c', hook.command], { env: f.env, input: payload, encoding: 'utf8', timeout: 20000 });
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), { args: ['hook'], stdin: payload.toString('base64') });
@@ -154,12 +156,16 @@ for (const outerShell of ['cmd', 'powershell']) {
     const payload = Buffer.from('\uFEFF{"cwd":"S:\\\\项目\\\\app","source":"startup"}\r\n');
     const executable = outerShell === 'cmd' ? process.env.ComSpec || 'cmd.exe' : powerShell;
     const args = outerShell === 'cmd'
-      ? ['/d', '/s', '/c', hook.commandWindows]
+      ? ['/d', '/s', '/c', `"${hook.commandWindows}"`]
       : ['-NoProfile', '-NonInteractive', '-Command', hook.commandWindows];
     // Run the exact installed command, not a reconstructed equivalent: the
     // outer PowerShell must not expand PLUGIN_ROOT into nested command source.
+    // cmd.exe is not a C argv parser: use the same outer quoting + verbatim
+    // command line as Node's own cmd shell adapter. Otherwise Node adds \"
+    // escapes and PowerShell evaluates the hook as a literal string instead.
     const result = spawnSync(executable, args, {
-      env: f.env, input: payload, encoding: 'utf8', timeout: 10000,
+      env: f.env, input: payload, encoding: 'utf8', timeout: 20000,
+      windowsVerbatimArguments: outerShell === 'cmd',
     });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stderr);

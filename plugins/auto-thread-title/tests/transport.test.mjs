@@ -19,6 +19,14 @@ async function temporary(testContext) {
   return directory;
 }
 async function executable(file) { await writeFile(file, 'synthetic-placeholder'); await chmod(file, 0o755); }
+async function assertNodeScriptLaunch(spec, script) {
+  // Windows sync/native realpath APIs may choose equivalent DOS 8.3 and long
+  // spellings. Compare both sides through the same native canonicalization,
+  // while still requiring the current Node and exactly one script argument.
+  assert.equal(spec.args.length, 1);
+  assert.equal(await realpath(spec.file), await realpath(process.execPath));
+  assert.equal(await realpath(spec.args[0]), await realpath(script));
+}
 async function audited(testContext, scenario = 'normal') {
   const directory = await temporary(testContext);
   const audit = path.join(directory, 'audit.jsonl');
@@ -57,9 +65,8 @@ test('Windows official npm wrapper launches JavaScript through Node, never a she
   const script = path.join(directory, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
   await mkdir(path.dirname(script), { recursive: true });
   await writeFile(script, '// synthetic npm entry');
-  const target = await realpath(script);
-  assert.deepEqual(resolveCodex({ executable: wrapper, platform: 'win32' }), { file: process.execPath, args: [target] });
-  assert.deepEqual(resolveCodex({ env: { Path: directory }, platform: 'win32' }), { file: process.execPath, args: [target] });
+  await assertNodeScriptLaunch(resolveCodex({ executable: wrapper, platform: 'win32' }), script);
+  await assertNodeScriptLaunch(resolveCodex({ env: { Path: directory }, platform: 'win32' }), script);
 });
 
 test('explicit JavaScript entry points use Node without requiring executable permissions', async (t) => {
@@ -67,9 +74,8 @@ test('explicit JavaScript entry points use Node without requiring executable per
   for (const extension of ['js', 'mjs', 'cjs']) {
     const script = path.join(directory, `codex.${extension}`);
     await writeFile(script, '// synthetic entry');
-    const target = await realpath(script);
     for (const platform of ['win32', 'darwin', 'linux']) {
-      assert.deepEqual(resolveCodex({ executable: script, platform }), { file: process.execPath, args: [target] });
+      await assertNodeScriptLaunch(resolveCodex({ executable: script, platform }), script);
     }
   }
 });
