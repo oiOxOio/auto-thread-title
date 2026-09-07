@@ -1,6 +1,6 @@
 {
   "name": "auto-thread-title",
-  "version": "0.1.0+codex.20260907032639",
+  "version": "0.1.0+codex.20260907034709",
   "description": "Normalize new Codex task titles, rename one linked task, or preview and confirm a title-only batch across local tasks.",
   "author": {
     "name": "Why.Ping"

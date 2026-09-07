@@ -1,75 +1,130 @@
-# 自动对话标题
+# Why Ping Codex Plugins
 
-开发者：**Why.Ping**。GitHub 公开仓库：`oiOxOio/auto-thread-title`。
+由 **Why.Ping** 维护的 Codex 插件集合与远程插件市场。
 
-插件按 `MMDD | 类型 | 主题` 整理任务标题，例如 `0903 | 优化 | 批次文字显示`。日期仅取任务创建时间 `createdAt`，按 `Asia/Shanghai` 转换；类型限定为功能、设计、修复、优化、发布、探索、文档、研究。主题简洁具体，不重复项目名，无法确定时保留原名。
+一个仓库集中管理多个插件，每个插件独立安装、独立说明、独立维护。后续新增插件会加入同一个市场，无需为每个插件再添加一个仓库。
 
-## 三种使用方式
+- 仓库：[oiOxOio/codex-plugins](https://github.com/oiOxOio/codex-plugins)
+- 市场标识：`why-ping`
+- 安装格式：`<插件名>@why-ping`
 
-| 入口 | 处理范围 | 执行方式 |
+这是个人维护的公开插件市场，不是 OpenAI 官方插件市场。公开仓库可以直接读取；各插件的运行权限、依赖和第三方服务授权仍以其说明为准。
+
+## 插件目录
+
+| 插件 | 能做什么 | 使用说明 |
 | --- | --- | --- |
-| 自动新任务 | 配置目录下刚创建的任务 | 在首轮运行中整理一次 |
-| `$rename-task-title` | 用户提供的一个 `codex://threads/<thread-id>` 链接 | 单次读取，最多改名一次 |
-| `$rename-all-task-titles` | 本机所有已入库的 Codex 任务，也可指定更小范围 | 分页读取、两列预览、确认后修改并校验 |
+| `auto-thread-title` · 自动对话标题 | 自动整理新任务标题；手动整理单个任务；预览确认后批量整理本机任务 | [查看说明](plugins/auto-thread-title/README.md) |
 
-三个入口共用固定命名规则，只修改任务标题。绝不修改项目名称、任务内容、归属、排序、置顶或归档状态；不处理 ChatGPT 云端对话。
+目录只列出已经提供的插件。各插件的系统支持、作用范围、额度消耗及安全边界，请阅读对应说明后再安装。
 
-## 安装
+## 快速开始
 
-需要支持插件和钩子的 Codex，以及可用的 Python 3.10 或更新版本。Windows 钩子调用 `python`；其他系统入口调用 `python3`，但当前自动作用域按 Windows 路径处理，尚未验证跨平台运行。批量技能还需要本机 Codex CLI 支持 App Server 的 `thread/list` 游标分页和 `useStateDbOnly` 参数。
+需要支持 `codex plugin` 命令的 Codex CLI；使用桌面任务工具的插件还需要 Codex 桌面端。其他依赖按插件分别安装，例如当前标题插件需要 Python 3.10+。
 
-此仓库为公开仓库，读取不要求专用 GitHub 授权：
+先添加远程市场：
 
 ```powershell
-codex plugin marketplace add oiOxOio/auto-thread-title
+codex plugin marketplace add https://github.com/oiOxOio/codex-plugins.git
+```
+
+再安装需要的插件，例如：
+
+```powershell
 codex plugin add auto-thread-title@why-ping
 ```
 
-安装后，Codex 会自动发现插件内的 `hooks/hooks.json`，无需将钩子复制到用户配置。首次使用必须在 Codex CLI 的 `/hooks` 中审核并信任这个插件的钩子；安装插件不等于自动授权钩子运行。钩子定义变化后可能需要重新审核。完成后新建任务测试。
+添加市场与安装插件是两件事。本市场按需提供插件，不会因为添加市场就批量安装所有插件；以后也可从 `why-ping` 选择其他插件。
 
-本机若已安装 `auto-thread-title@personal`，只保留其中一个版本启用，避免两个自动钩子重复触发。插件安装与项目范围跟随本机 Codex 配置；换 Codex 账号本身不会替换这些本地文件，但新账号仍需有工具使用权限。
+安装后新建一个 Codex 任务使用。包含钩子的插件还需按 Codex 提示审核；发现插件内的钩子文件不等于自动信任它们。[钩子与信任说明](https://learn.chatgpt.com/docs/hooks)
 
-## 自动模式与额度
+## 更新与卸载
 
-`plugins/auto-thread-title/config.json` 使用 `S:\project` 作为自动模式的项目根目录，仅该目录下的新任务触发；其他路径不会自动改名。换电脑后若目录不同，需要调整该文件并更新插件。不要将空的 `projectRoots` 当成“全部项目”：当前实现会跳过全部任务。
+### 更新已安装的插件
 
-命名使用当前正在运行的任务模型，不调用独立模型接口、不增加后台轮询，不需要插件专用 API Key。命名占用当前回合的少量模型用量，并非零额度。插件依赖 Codex 桌面端的任务读取和改名工具；不可用时跳过。
-
-## 整理单个或全部任务
-
-单个：选择 **手动整理对话标题**，或输入：
-
-```text
-使用 $rename-task-title 整理这个任务：codex://threads/<thread-id>
-```
-
-全部：选择 **整理全部对话标题**，或输入：
-
-```text
-使用 $rename-all-task-titles 整理本机全部 Codex 任务标题。
-```
-
-也可以要求只整理某个项目。批量模式不受自动模式的 `S:\project` 限制，默认包含本机各项目、无项目、置顶和归档任务，不包含子代理临时任务、其他主机或 ChatGPT 对话。
-
-批量流程先读取完整清单，默认跳过格式、日期等结构检查已合规的标题；如需核对其主题，明确要求“也重新检查已合规标题的主题”。仅为待整理项读取少量实际内容。预览严格使用“原名称 / 新名称”两列，确认前不写入；未展示的条目不在授权范围内。改名前重新检查原名与任务身份，发生变更就跳过；无法确定主题、分页失败或工具不可用时不强行改名。不通过取消归档来处理归档任务。
-
-改名接口没有原子条件更新能力，不能保证完全消除最后一次检查与写入之间的并发窗口。请避免在确认后的执行阶段同时手动改同一批标题。
-
-只读清单脚本仅请求初始化和 `thread/list`，不启动模型回合，不读取完整会话文件，也不直接修改数据库。清单留在本机，不应提交到 GitHub；脚本失败不会退回修改 SQLite/JSONL 的方式。
-
-## 开发与验证
-
-插件本体位于 `plugins/auto-thread-title/`，市场清单位于 `.agents/plugins/marketplace.json`，市场名称为 `why-ping`。
+先刷新市场，再重新安装要更新的插件：
 
 ```powershell
-python -m unittest discover -s plugins/auto-thread-title/tests -v
-python plugins/auto-thread-title/skills/rename-all-task-titles/scripts/list_tasks.py --summary-only --page-size 20
+codex plugin marketplace upgrade why-ping
+codex plugin add auto-thread-title@why-ping
 ```
 
-第一条使用模拟数据验证模板、分页、重复项、异常、只读 RPC 等行为；第二条只读验证本机清单，只输出计数，不改任何标题。提示词中的确认流程仍需由调用技能的模型遵守，单元测试不代表真实批量改名已经执行。
+其他插件将第二行替换为对应的 `<插件名>@why-ping`。刷新市场目录不代表所有已安装插件都已更新；完成后在新任务中验证。
 
-更新插件时，在仓库插件目录编辑并校验，更新版本后提交、推送；客户端更新对应市场后重新安装插件，在新任务中验证。若钩子提示需要审核，请重新审核当前定义。此次新增批量技能没有改动自动钩子。
+### 查看当前来源
 
-仓库不包含 Codex 账号令牌、任务记录或用户级 Codex 配置。Python 缓存、环境文件、日志和认证文件不纳入版本控制。
+```powershell
+codex plugin marketplace list --json
+codex plugin list --json
+```
 
-参考：[Codex 插件打包](https://developers.openai.com/plugins/build/plugins)、[钩子发现与信任](https://learn.chatgpt.com/docs/hooks)、[App Server 分页 API](https://learn.chatgpt.com/docs/app-server#list-threads-with-pagination--filters)。
+此市场的 `marketplaceSource.source` 应为 `https://github.com/oiOxOio/codex-plugins.git`。远程市场会下载到本机缓存；插件条目里出现本地路径或 `source: local` 并不代表使用了个人本地开发市场，应结合 `marketplaceSource` 判断。
+
+### 卸载单个插件
+
+```powershell
+codex plugin remove auto-thread-title@why-ping
+```
+
+这不会卸载同市场的其他插件。若不再需要整个市场，再移除市场来源：
+
+```powershell
+codex plugin marketplace remove why-ping
+```
+
+移除市场来源不等于卸载已经安装的插件，需要停用或卸载的插件请分别处理。
+
+## 从旧仓库地址迁移
+
+本仓库原名为 `oiOxOio/auto-thread-title`，现已更名为 `oiOxOio/codex-plugins`。**仓库改名，市场标识和现有插件标识不变**：
+
+| 项目 | 当前值 |
+| --- | --- |
+| GitHub 仓库 | `oiOxOio/codex-plugins` |
+| 市场标识 | `why-ping` |
+| 标题插件安装标识 | `auto-thread-title@why-ping` |
+
+如果以前已经添加了旧地址，先移除旧的市场来源，再添加新地址，避免同名市场来源冲突：
+
+```powershell
+codex plugin marketplace remove why-ping
+codex plugin marketplace add https://github.com/oiOxOio/codex-plugins.git
+codex plugin add auto-thread-title@why-ping
+```
+
+开发者还应更新自己的 Git 远程地址：
+
+```powershell
+git remote set-url origin https://github.com/oiOxOio/codex-plugins.git
+```
+
+GitHub 会对旧仓库地址提供重定向，但建议主动更新；不要重新创建同名的旧仓库，否则重定向会失效。[GitHub 仓库改名说明](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository)
+
+## 仓库结构
+
+```text
+codex-plugins/
+├── .agents/plugins/marketplace.json   # why-ping 市场目录
+├── plugins/
+│   └── auto-thread-title/
+│       ├── .codex-plugin/plugin.json # 独立插件清单
+│       ├── skills/                   # 手动调用的技能
+│       ├── hooks/                    # 生命周期钩子
+│       ├── scripts/                  # 运行脚本
+│       ├── tests/                    # 插件测试
+│       ├── config.json               # 插件配置
+│       └── README.md                 # 使用说明
+├── CONTRIBUTING.md                   # 新增插件、验证与发布
+└── README.md                         # 市场总览与安装入口
+```
+
+新插件放在 `plugins/<插件名>/` 下，并加入市场目录。无需新建市场，也不要把新功能都塞进已有插件。完整流程见 [开发与发布指南](CONTRIBUTING.md)。
+
+## 安全与反馈
+
+- 安装前了解插件会读取什么、修改什么，以及是否调用外部服务或使用模型额度。
+- 不要提交账号令牌、密钥、任务记录、真实业务数据或用户级 Codex 配置。
+- 对任务改名等写操作，遵守各插件的确认规则，不扩大授权范围。
+- 问题反馈请提供插件名称、版本、系统、复现步骤和脱敏错误信息，不要附带认证文件。
+
+可通过 [GitHub Issues](https://github.com/oiOxOio/codex-plugins/issues) 反馈问题或提出新插件需求。
