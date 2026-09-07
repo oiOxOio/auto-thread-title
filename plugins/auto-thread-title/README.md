@@ -15,7 +15,7 @@ codex plugin marketplace add https://github.com/oiOxOio/codex-plugins.git
 codex plugin add auto-thread-title@why-ping
 ```
 
-已添加该市场时无需重复添加；旧仓库地址的迁移方法见 [市场说明中的迁移章节](https://github.com/oiOxOio/codex-plugins#从旧仓库地址迁移)。
+已添加该市场时无需重复添加，直接安装需要的插件即可。
 
 需要支持插件的 Codex CLI、Codex 桌面端的任务读取与改名工具，以及 Python 3.10+。Windows 钩子调用 `python`，其他系统入口调用 `python3`；当前自动作用域按 Windows 路径处理，尚未验证跨平台运行。批量技能还需要 CLI 的 App Server 支持 `thread/list` 游标分页和 `useStateDbOnly`。
 
@@ -99,7 +99,7 @@ codex plugin marketplace upgrade why-ping
 codex plugin add auto-thread-title@why-ping
 ```
 
-完成后在新任务中验证。若仍有 `auto-thread-title@personal` 本地开发版，请避免和远程版同时启用，以免钩子重复触发。
+完成后在新任务中验证。
 
 在插件源中设置 `enabled: false` 并更新安装后，只会关闭自动钩子，不会关闭显式调用的手动技能。卸载整个插件：
 

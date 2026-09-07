@@ -74,32 +74,6 @@ codex plugin marketplace remove why-ping
 
 移除市场来源不等于卸载已经安装的插件，需要停用或卸载的插件请分别处理。
 
-## 从旧仓库地址迁移
-
-本仓库原名为 `oiOxOio/auto-thread-title`，现已更名为 `oiOxOio/codex-plugins`。**仓库改名，市场标识和现有插件标识不变**：
-
-| 项目 | 当前值 |
-| --- | --- |
-| GitHub 仓库 | `oiOxOio/codex-plugins` |
-| 市场标识 | `why-ping` |
-| 标题插件安装标识 | `auto-thread-title@why-ping` |
-
-如果以前已经添加了旧地址，先移除旧的市场来源，再添加新地址，避免同名市场来源冲突：
-
-```powershell
-codex plugin marketplace remove why-ping
-codex plugin marketplace add https://github.com/oiOxOio/codex-plugins.git
-codex plugin add auto-thread-title@why-ping
-```
-
-开发者还应更新自己的 Git 远程地址：
-
-```powershell
-git remote set-url origin https://github.com/oiOxOio/codex-plugins.git
-```
-
-GitHub 会对旧仓库地址提供重定向，但建议主动更新；不要重新创建同名的旧仓库，否则重定向会失效。[GitHub 仓库改名说明](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository)
-
 ## 仓库结构
 
 ```text
