@@ -76,13 +76,27 @@ cd codex-plugins
 4. 写操作先用模拟数据或只读预览测试；不要拿真实用户任务进行未经确认的批量修改。
 5. 在新 Codex 任务中检查安装入口、技能发现和必要的钩子授权，不要仅凭源码存在就声称安装生效。
 
-当前标题插件的测试命令（在仓库根目录执行）：
+当前标题插件使用 Node.js 22+ 的内置测试运行器，没有 npm 依赖。从仓库根目录执行（Windows、macOS、Linux 相同）：
 
-```powershell
-python -m unittest discover -s plugins/auto-thread-title/tests -v
+```text
+cd plugins/auto-thread-title
+node --test
 ```
 
-其他插件应提供自己的验证方式，本仓库暂不假定所有插件都使用 Python，也未声明统一自动化 CI 已部署。
+无参数的 `node --test` 在插件目录发现测试，不依赖 Bash 的通配符展开。测试使用临时配置、合成任务和假 App Server，不需要 Codex 账号、不读取真实任务，也不运行真实改名。
+
+[标题插件 CI](.github/workflows/title-plugin-tests.yml) 配置了 Ubuntu、Windows、macOS × Node.js 22/24 的六种组合。工作流仅有 `contents: read`，不保留 checkout 凭据、不安装 npm 依赖、不访问仓库 secrets。只有对应提交的 CI 实际通过，才可记录该矩阵的测试结果；首次发布仍需检查各平台的桌面环境、钩子信任和运行时路径。
+
+标题插件的补充验收：
+
+- POSIX 大小写、Windows 盘符/UNC、中文和空格路径、符号链接作用域边界。
+- 配置替换与追加分开验证：追加只验证新目录，保留离线或其他平台的旧目录及启停状态；拒绝混用替换/追加选项。
+- 原生启动器、UTF-8/BOM 标准输入、解释器缺失、进程退出与超时；Windows 运行 PowerShell 启动器，不设置执行策略绕过。
+- `doctor` 只检查环境；`doctor --probe` 验证已安装 CLI 的 schema，不能用新版本在线文档替代本机能力检查。
+- 批量分页、活动/归档范围、输出分片、冲突检测和只读 RPC 白名单；预览确认规则不能被性能优化削弱。
+- 手动实机检查在隔离测试任务上进行，改名必须明确获批。CI 通过不等于完成真实桌面改名验收。
+
+其他插件仍应提供自己的验证方式，不强制使用标题插件的运行时或测试框架。
 
 ## 版本与发布
 
@@ -106,6 +120,6 @@ codex plugin add auto-thread-title@why-ping
 
 - Codex、GitHub 或第三方服务令牌，以及认证文件、私钥、带凭据的 URL。
 - 真实任务内容、任务清单、内部业务数据、运行日志或包含敏感信息的截图。
-- 用户级 Codex 配置、个人市场配置、插件安装缓存和 Python 编译缓存。
+- 用户级 Codex 配置、个人市场配置、插件安装缓存、运行时缓存和 `node_modules`。
 
 新的自动化或外部服务能力应先说明触发时机、费用、权限及停用方式，不应通过新增插件扩大已有插件的权限。市场代码公开不代表已通过官方审核，也不代表用户授权任意操作。

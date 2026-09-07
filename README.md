@@ -20,7 +20,7 @@
 
 ## 快速开始
 
-需要支持 `codex plugin` 命令的 Codex CLI；使用桌面任务工具的插件还需要 Codex 桌面端。其他依赖按插件分别安装，例如当前标题插件需要 Python 3.10+。
+需要支持 `codex plugin` 命令的 Codex CLI；使用桌面任务工具的插件还需要 Codex 桌面端。依赖按插件分别安装：当前标题插件的自动钩子和批量清单使用 Node.js 22+，不需要 Python 或 `npm install`；手动单任务只依赖桌面任务工具。
 
 先添加远程市场：
 
@@ -37,6 +37,8 @@ codex plugin add auto-thread-title@why-ping
 添加市场与安装插件是两件事。本市场按需提供插件，不会因为添加市场就批量安装所有插件；以后也可从 `why-ping` 选择其他插件。
 
 安装后新建一个 Codex 任务使用。包含钩子的插件还需按 Codex 提示审核；发现插件内的钩子文件不等于自动信任它们。[钩子与信任说明](https://learn.chatgpt.com/docs/hooks)
+
+标题插件不再绑定 Windows 固定盘符，默认自动目录为空；需要按[插件说明](plugins/auto-thread-title/README.md#自动整理新任务)显式配置自己的项目目录。Windows、macOS 和 Linux 共用同一份核心实现；平台 CI 和桌面实机验收的范围见插件说明，不把源码兼容性当成所有环境已经验证。
 
 ## 更新与卸载
 
@@ -84,9 +86,10 @@ codex-plugins/
 │       ├── .codex-plugin/plugin.json # 独立插件清单
 │       ├── skills/                   # 手动调用的技能
 │       ├── hooks/                    # 生命周期钩子
-│       ├── scripts/                  # 运行脚本
+│       ├── scripts/                  # POSIX / Windows 启动入口
+│       ├── src/                      # 跨平台 Node.js 实现
 │       ├── tests/                    # 插件测试
-│       ├── config.json               # 插件配置
+│       ├── config.json               # 安全默认配置（用户配置独立保存）
 │       └── README.md                 # 使用说明
 ├── CONTRIBUTING.md                   # 新增插件、验证与发布
 └── README.md                         # 市场总览与安装入口
