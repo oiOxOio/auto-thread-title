@@ -1,41 +1,74 @@
 # Auto Thread Title
 
-Automatically normalizes a newly created Codex project task title once, using
-the first turn that is already running. It does not poll, schedule another
-model run, or inspect other conversations.
+Developer: **Why.Ping**.
 
-It also includes a manual `rename-task-title` skill for one existing local
-Codex task supplied through an explicit `codex://threads/<thread-id>` link.
+Three entry points share the exact `MMDD | 类型 | 主题` title policy:
 
-## Default behavior
+- Automatic hook: normalize a newly created project task once, in its first turn.
+- `$rename-task-title` (**手动整理对话标题**): rename one explicitly linked local task.
+- `$rename-all-task-titles` (**整理全部对话标题**): inventory local Codex tasks,
+  preview every proposed change, and rename only after explicit confirmation.
 
-- Runs only for `SessionStart` with source `startup`.
-- Runs only when `cwd` is under a root in `config.json` (currently `S:\\project`).
-- Reads only the current thread to obtain its exact `createdAt` value.
-- Uses `Asia/Shanghai` and the exact format `MMDD | 类型 | 主题`.
-- Requires an ASCII pipe (`U+007C`) with one space on each side; full-width pipes and dot separators are rejected.
-- Allows only: 功能、设计、修复、优化、发布、探索、文档、研究.
-- Keeps the original title when the type or topic is unclear.
-- Changes only the task title, at most once in the first turn.
-- Silently skips when the required Codex app tools are unavailable.
+All modes change only titles. Project names, task content, associations,
+ordering, pins and archive states must remain untouched. Uncertain topics stay
+unchanged. ChatGPT conversations and other hosts are outside scope.
 
-ChatGPT cloud project conversations do not receive Codex lifecycle hooks and
-are intentionally outside this plugin's scope.
+## Fixed policy
 
-## Manual rename
+Use only `createdAt`, converted to `Asia/Shanghai`, never `updatedAt`.
+Use ASCII `|` with exactly one space on each side, not full-width pipes or dots.
+Allowed types: 功能、设计、修复、优化、发布、探索、文档、研究.
+Topics are specific, at most 18 characters, and do not repeat the project name.
 
-Select **手动整理对话标题** or invoke `$rename-task-title`, then provide exactly
-one Codex task link. The skill reads only that task and applies the same fixed
-`MMDD | 类型 | 主题` policy. It does not scan the sidebar, and it leaves the title
-unchanged when the type or topic cannot be determined.
+## Automatic mode (unchanged)
 
-## Disable
+Runs only for `SessionStart` with source `startup`, when `cwd` is under a root
+in `config.json` (currently `S:\project`). Reads only the current task, uses the
+already-running model, and attempts at most one title update. No polling,
+separate model call or scan of other tasks. Missing app tools cause a silent skip.
 
-Set `enabled` to `false` in `config.json`, then update/reinstall the local
-plugin. Uninstalling the plugin also disables the hook; existing titles remain.
+Plugin hooks are discovered by Codex but require user trust through `/hooks`.
+No manual hook copying is needed. Set `enabled: false` in `config.json` and
+update/reinstall to disable the automatic hook; this setting does not disable
+the explicitly invoked manual skills. Uninstalling removes all plugin entry
+points without restoring previous titles.
+
+## Single-task mode
+
+Supply exactly one `codex://threads/<thread-id>` link to `$rename-task-title`.
+Reads only that task, with at most one rename. No batch scan.
+
+## Batch mode
+
+Invoke `$rename-all-task-titles`. Default scope includes all locally indexed
+Codex user tasks across projects, including projectless, pinned and archived
+tasks. A user may explicitly narrow the scope. It does not inherit the automatic
+hook's project-root filter.
+
+Requires Python 3.10+, local Codex CLI App Server cursor pagination, and the
+Codex app read/rename tools. The bundled helper reads both archive states,
+all providers, and user-task sources with `useStateDbOnly: true`.
+It never sends mutation or model-turn requests. CLI/API failure means stop,
+not a partial batch or direct SQLite/JSONL editing fallback.
+
+For lower usage, structurally compliant titles are skipped by default; request
+a semantic recheck explicitly when needed. Only candidates get short history
+reads. The skill shows exactly two columns, 原名称 and 新名称, and waits for
+confirmation. Approval is bound to exact task IDs and old/new titles.
+It rechecks for concurrent edits before writing, skips conflicts, then verifies
+results. No forced rename retries or unarchiving. The API has no atomic
+compare-and-set, so avoid editing the same titles during execution.
+
+Naming uses the current task model and consumes current-turn usage, not an
+independent model or plugin API key. Inventory is local; do not publish task data.
 
 ## Test
 
 ```powershell
 python -m unittest discover -s tests -v
+python skills/rename-all-task-titles/scripts/list_tasks.py --summary-only --page-size 20
 ```
+
+Unit tests use synthetic tasks. The second command checks real pagination but
+prints only counts and never renames. New skills are picked up in a new Codex
+task after updating/reinstalling the plugin.

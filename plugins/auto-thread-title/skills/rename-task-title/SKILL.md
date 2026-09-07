@@ -7,6 +7,8 @@ description: Rename exactly one existing local Codex task when the user explicit
 
 Apply the same fixed naming policy as the plugin's automatic new-task hook. The user's explicit request to rename the linked task authorizes one title-only change; it does not authorize any other mutation.
 
+For an explicit request to organize all tasks or a batch, use `$rename-all-task-titles` instead. Do not expand this single-task skill into a batch operation.
+
 ## Resolve one target
 
 - Accept exactly one explicit local Codex task link in the form `codex://threads/<thread-id>`.

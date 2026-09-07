@@ -1,0 +1,7 @@
+interface:
+  display_name: "整理全部对话标题"
+  short_description: "批量整理本机全部 Codex 任务标题，先预览确认，只修改标题并跳过不确定项"
+  default_prompt: "使用 $rename-all-task-titles 整理本机全部 Codex 任务标题，先给出两列对照表，确认后再修改。"
+
+policy:
+  allow_implicit_invocation: true
