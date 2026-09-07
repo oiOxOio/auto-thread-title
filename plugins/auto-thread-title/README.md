@@ -17,9 +17,59 @@ codex plugin add auto-thread-title@why-ping
 
 已添加该市场时无需重复添加，直接安装需要的插件即可。
 
-需要支持插件的 Codex CLI、Codex 桌面端的任务读取与改名工具，以及 Python 3.10+。Windows 钩子调用 `python`，其他系统入口调用 `python3`；当前自动作用域按 Windows 路径处理，尚未验证跨平台运行。批量技能还需要 CLI 的 App Server 支持 `thread/list` 游标分页和 `useStateDbOnly`。
+自动钩子和批量清单使用 **Node.js 22+**，仅依赖 Node.js 标准库，无需 Python、`npm install`、插件专用 API Key 或编译步骤。Windows、macOS、Linux 共用 `src/` 核心代码，通过各自的原生启动器查找运行时。
+
+| 功能 | 必要环境 |
+| --- | --- |
+| 手动单个任务 | Codex 桌面端的 `read_thread` / `set_thread_title` 工具；不需要 Node.js |
+| 自动新任务 | Node.js 22+、已启用并信任的 SessionStart 钩子、明确配置的项目目录，以及桌面任务工具 |
+| 手动批量 | Node.js 22+、同一本机任务存储的 Codex CLI，以及桌面任务工具 |
+
+批量入口会先检查**本机已安装 CLI** 的 schema，要求 App Server 支持 `thread/list` 的归档筛选、用户来源筛选、游标分页和 `useStateDbOnly`。桌面端已安装不代表 PATH 中有可用 CLI；较旧 CLI 可能需要更新。启动器不会自动安装软件、切换账号或更改企业执行策略。
 
 安装后新建一个任务，让 Codex 载入技能。插件内的 `hooks/hooks.json` 会被发现，不需要复制到用户配置；首次使用自动钩子时需在 Codex CLI 的 `/hooks` 中审核并信任，钩子定义变化后可能需要重新审核。[Codex 钩子说明](https://learn.chatgpt.com/docs/hooks)
+
+### 统一入口与环境检查
+
+优先在 Codex 中使用设置技能，不必手动定位脚本。例如（路径替换为自己的真实项目目录）：
+
+```text
+使用 $configure-task-titles，检查当前环境，并将 /Users/alice/project 配置为自动标题的项目目录。
+```
+
+只想诊断、不修改配置时，明确说“使用 `$configure-task-titles` 仅检查当前环境”。设置技能会读取现有配置，区分新增目录与替换目录；执行结果不代表已完成真实改名验收。
+
+需要命令行时，以下 `<插件目录>` 指实际安装的 `auto-thread-title` 目录，不是技能子目录；从 `codex plugin list --json` 核对已安装来源和路径，替换占位符。请在实际运行钩子/技能的 Codex 环境检查，终端 PATH 正常不代表桌面进程的 PATH 相同。
+
+macOS / Linux：
+
+```sh
+sh "<插件目录>/scripts/run.sh" doctor
+sh "<插件目录>/scripts/run.sh" doctor --probe
+```
+
+Windows（PowerShell）：
+
+```powershell
+powershell -NoProfile -File "<插件目录>\scripts\run.ps1" doctor
+powershell -NoProfile -File "<插件目录>\scripts\run.ps1" doctor --probe
+```
+
+`doctor` 检查 Node、配置、项目目录可访问性和 CLI 位置；`--probe` 额外运行 CLI 的 schema 生成命令，使用并清理临时 schema，不读取任务。它不会验证桌面工具或改名权限。自动目录为空时 `automaticScopeReady: false` 是安全默认状态，并不妨碍手动整理；缺少 CLI 会使诊断返回非零，但不表示手动单任务不可用。
+
+启动器依次尝试显式 `AUTO_THREAD_TITLE_NODE`、Codex 已提供的 `CODEX_PRIMARY_RUNTIME_NODE`、PATH 的 `node`，然后检查常见安装位置。不加载 shell profile，不安装包，也不修改 PATH；显式覆盖无效时停止，不偷偷换另一个程序。
+
+| 覆盖项 | 用途 |
+| --- | --- |
+| `AUTO_THREAD_TITLE_NODE` | 启动器使用的 Node.js 22+ 可执行文件绝对路径 |
+| `AUTO_THREAD_TITLE_CODEX` | 批量清单/诊断使用的 Codex CLI 路径；建议绝对路径 |
+| `--codex "<CLI绝对路径>"` | 本次 `doctor` / `inventory` 覆盖，优先于环境变量及保存配置 |
+| `configure --codex "<CLI绝对路径>"` | 将 CLI 路径保存到用户配置，避免每次输入 |
+| `AUTO_THREAD_TITLE_CONFIG` | 显式指定用户配置文件绝对路径 |
+
+若 Node 来自 nvm、fnm 等版本管理器，桌面进程可能没有对应 PATH；在其正常启动环境提供 `AUTO_THREAD_TITLE_NODE`，然后重启 Codex。也可以使用已经确认的 Node 绝对路径直接运行 `src/cli.mjs`，所有子命令不变；PowerShell 中调用带引号的可执行路径要使用 `&`。不要为运行启动器添加 `-ExecutionPolicy Bypass`，策略拦截时交由管理员批准签名或运行方式。
+
+Windows 官方 npm CLI 的 `.cmd` 包装会解析到其相邻 `codex.js` 并由 Node 直接启动，不经 `cmd` 执行用户路径；自定义 `.cmd` / `.bat` / `.ps1` 包装不受支持，应选择真实 `codex.exe` 或受支持的官方 npm 安装。
 
 ## 固定命名规则
 
@@ -46,9 +96,33 @@ MMDD | 类型 | 主题
 
 仅在 `SessionStart` 的来源为 `startup`，且项目目录位于配置的根目录下时触发；恢复旧任务不会触发。只读取当前任务，不扫描其他任务，不轮询。
 
-当前 [config.json](config.json) 使用 `S:\project` 作为自动模式的项目根目录。这是本版本的默认作用域，不代表任意电脑上的全部项目。目录不匹配时不会自动改名；空的 `projectRoots` 会跳过全部任务。
+默认 [config.json](config.json) 的 `projectRoots` 是 `[]`：自动模式不会处理任何任务，需配置一次自己的项目根目录。不会猜测用户名、扫描所有磁盘或默认扩大到整个用户目录。示例路径必须替换为本机已存在、可访问的目录：
 
-需要适配自己的目录时，应在自己的插件源中调整配置并发布或本地测试。不要直接修改安装缓存作为长期配置，更新可能覆盖它。当前没有动态规则设置界面。
+macOS / Linux：
+
+```sh
+sh "<插件目录>/scripts/run.sh" configure --project-root "$HOME/project" --enable
+```
+
+Windows：
+
+```powershell
+powershell -NoProfile -File "<插件目录>\scripts\run.ps1" configure --project-root "S:\project" --enable
+```
+
+可在同一条命令重复 `--project-root` 配置多个根目录。每次传入这些选项会**替换整份目录列表**，不是追加。需要保留已有目录时，改用可重复的 `--add-project-root`，例如：
+
+```sh
+sh "<插件目录>/scripts/run.sh" configure --add-project-root "$HOME/another-project"
+```
+
+Windows 同样在 PowerShell 启动器后使用 `configure --add-project-root "D:\another-project"`。追加模式只验证新增目录，保留旧目录及启停状态；原有目录暂未挂载或属于另一系统也不会阻止添加。两个目录选项不能混用。`--enable` / `--disable` 只切换自动模式，不影响手动技能。
+
+支持本机绝对路径和 `~/`；拒绝普通相对路径。作用域比较使用平台原生路径及两端的真实路径，不会把 `project-old` 当成 `project` 子目录；指向根目录外的符号链接不会扩大作用域。
+
+`configure` 将配置保存在 `AUTO_THREAD_TITLE_CONFIG` 指定的文件，未指定时使用既有 `CODEX_HOME` 下的 `auto-thread-title/config.json`，再无则使用用户主目录下 `.codex/auto-thread-title/config.json`。它不修改 `CODEX_HOME` 环境变量，也不修改插件安装缓存。钩子和清单只读取配置；只有显式 `configure` 写入配置。
+
+从 Python 旧版升级时，原先默认的 Windows 项目目录**不会自动迁移**。Windows 用户若仍希望该范围生效，运行上面的 Windows 配置命令；其他平台配置自己的目录。不要把整个 Codex 用户配置跨账号复制，不要编辑下载缓存作为长期设置。
 
 ### 手动整理单个任务
 
@@ -68,7 +142,7 @@ MMDD | 类型 | 主题
 使用 $rename-all-task-titles 整理本机全部 Codex 任务标题。
 ```
 
-可以进一步限定“只整理某个项目”。默认范围包含本机所有已入库的 Codex 用户任务：各项目、无项目、置顶和归档任务；不包含其他主机、ChatGPT 云端对话或子代理临时任务。手动模式不受自动模式的 `S:\project` 限制。
+可以进一步限定“只整理某个项目”。默认范围包含当前 CLI 所用本机 Codex home 中所有已入库的用户任务：各项目、无项目、置顶和归档任务；不包含其他主机、ChatGPT 云端对话或子代理临时任务。CLI 与桌面端必须对应同一任务存储，不切换账号或扫描其他 home。手动模式不受自动模式的 `projectRoots` 限制。
 
 执行流程：
 
@@ -80,13 +154,15 @@ MMDD | 类型 | 主题
 
 若需要复查已经合规标题的主题，额外说明“也重新检查已合规标题的主题”。没有展示的任务不会自动加入本次修改；分页不完整、工具不可用或内容不足时不强行改名，也不通过取消归档来处理归档任务。
 
+清单支持 `--page-size 1..200`（默认 100）、`--needs-review`、`--summary-only` 和 `--offset N --limit N`。它先完整遍历活动/归档任务，再筛选或分片输出；`complete: true` 只表示服务端枚举完成，不代表当前输出包含全部候选。分片需要同时检查 `outputComplete`、`outputTotal` 和 `nextOffset`；每次命令都会重新枚举，不是固定快照。减少输出能节省上下文，但不会省略后台分页或授权确认；数据变化时应重新核对，不把未显示的剩余项纳入批准。
+
 改名接口没有原子条件更新能力，无法完全消除最后一次检查与写入之间的并发窗口。执行期间请避免同时手动修改同一批标题。确认流程由调用技能的模型遵守，不是独立权限网关。
 
 ## 模型、额度与数据边界
 
 命名使用当前任务正在运行的模型，不调用独立模型接口、不启动额外模型任务，也不需要插件专用 API Key。命名会使用当前回合额度，并非零消耗；批量整理的用量随待处理任务数增长。
 
-清单脚本在本机运行，仅请求初始化和 `thread/list`；不请求模型回合、不读取完整会话文件，也不直接修改 SQLite 或 JSONL。用于提炼主题的短历史会进入当前 Codex 回合上下文，不应把整个整理过程理解成完全离线。
+清单脚本在本机运行，先生成兼容性 schema，再仅发送初始化和 `thread/list` RPC；不请求模型回合、不读取完整会话文件，也不直接修改 SQLite 或 JSONL。设有进程、分页、任务数和输出大小上限，错误时不输出伪装成完整结果的部分清单。用于提炼主题的短历史会进入当前 Codex 回合上下文，不应把整个整理过程理解成完全离线。
 
 换 Codex 账号本身不会替换本机插件文件，但仍需当前账号和环境允许使用对应工具。不要将任务清单、会话内容或认证信息提交到公开仓库。
 
@@ -101,23 +177,25 @@ codex plugin add auto-thread-title@why-ping
 
 完成后在新任务中验证。
 
-在插件源中设置 `enabled: false` 并更新安装后，只会关闭自动钩子，不会关闭显式调用的手动技能。卸载整个插件：
+用对应平台启动器执行 `configure --disable` 即可关闭自动钩子，无需修改插件源或重新发布，不会关闭显式调用的手动技能。用户配置独立于插件版本保存。卸载整个插件：
 
 ```powershell
 codex plugin remove auto-thread-title@why-ping
 ```
 
-卸载不会把已经整理过的标题恢复成原名。
+卸载不会把已经整理过的标题恢复成原名，也不会由本插件主动删除用户配置。
 
 ## 验证
 
-在本仓库根目录执行：
+从本仓库根目录执行测试（Node.js 22+，无需安装依赖）：
 
-```powershell
-python -m unittest discover -s plugins/auto-thread-title/tests -v
-python plugins/auto-thread-title/skills/rename-all-task-titles/scripts/list_tasks.py --summary-only --page-size 20
+```text
+cd plugins/auto-thread-title
+node --test
 ```
 
-第一条使用模拟数据测试命名规则、分页、异常和只读 RPC；第二条只读检查本机清单，仅输出计数，不改名。单元测试通过不等于已经执行过真实批量改名。
+测试使用临时配置、合成任务和假 App Server，覆盖路径、配置、命名、分页、启动与只读 RPC，不需要真实任务。需要检查本机清单时，由用户明确执行对应平台启动器的 `inventory --summary-only --page-size 20`；该命令会读取任务元数据，只输出计数，不改名。
+
+CI 已配置 Ubuntu、Windows、macOS × Node.js 22/24 的六种组合，见 [工作流](../../.github/workflows/title-plugin-tests.yml)。本次开发环境是 Linux / Node.js 24；新增矩阵的成功状态应以提交后的 Actions 结果为准。未完成 Windows/macOS 桌面实机端到端验收，不能仅凭 Linux 或模拟平台测试通过就声称所有平台已验证。实机验收需覆盖安装和信任、桌面环境下运行时发现、自动作用域内/外行为、只读清单，以及明确确认后的隔离任务改名。
 
 新增插件和发布要求见 [开发与发布指南](https://github.com/oiOxOio/codex-plugins/blob/main/CONTRIBUTING.md)。

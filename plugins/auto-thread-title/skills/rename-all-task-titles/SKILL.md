@@ -31,20 +31,44 @@ Discover the Codex app's `list_threads`, `read_thread`, and `set_thread_title`
 tools before proceeding. Use `list_threads` for app/project context, but **never
 treat its recent-task limit as a complete inventory**.
 
-Resolve this skill's installed directory, then run its bundled helper with the
-available Python 3.10+ interpreter (quote the absolute script path):
+Resolve this skill's installed directory and its containing plugin root
+(`../..` from this skill directory). Use the bundled launcher for the actual
+host platform; replace the placeholder with the resolved absolute plugin path:
 
-```text
-python "<this-skill-directory>/scripts/list_tasks.py" --needs-review
+```sh
+# macOS / Linux
+sh "<plugin-root>/scripts/run.sh" inventory --needs-review
 ```
 
-The helper uses the local CLI's App Server `thread/list` cursor API. It reads both
+```powershell
+# Windows
+powershell -NoProfile -File "<plugin-root>\scripts\run.ps1" inventory --needs-review
+```
+
+The launcher needs Node.js 22+, not Python or npm dependencies. It discovers
+the configured/Codex-provided runtime, PATH and common install locations. An
+already resolved, authorized Node.js binary can also run
+`"<plugin-root>/src/cli.mjs" inventory --needs-review` directly (use `&` before
+a quoted executable in PowerShell). Do not install dependencies, source shell
+profiles, or bypass PowerShell execution policy. If a prerequisite is missing,
+report it and stop; do not replace the helper with an ad hoc implementation.
+
+Use the launcher's `doctor` command for runtime/config/CLI diagnostics and
+`doctor --probe` to check the installed CLI schema without reading task data.
+If necessary, `--codex "<absolute-cli-path>"` selects an explicitly identified
+CLI; `AUTO_THREAD_TITLE_CODEX` and saved `codexPath` are also supported. Ensure
+it uses the same local task storage as the desktop app; do not change accounts
+or Codex homes. No helper command renames tasks or verifies desktop tool access.
+
+The helper checks the installed CLI schema before using its App Server
+`thread/list` cursor API. It reads both
 active and archived pages, all providers and user-task sources, without a pin or
 project filter. `useStateDbOnly: true` prevents thread-log scan-and-repair.
 It sends no model-turn or mutation requests. No API key specific to this plugin
 is needed. It lists only this local Codex home's indexed tasks, not cloud tasks.
 
-- Require exit code 0 and `complete: true`. Never claim all tasks were covered
+- Require exit code 0 and `complete: true`. These confirm full API enumeration,
+  not that a sliced output contains every candidate. Never claim all tasks were covered
   after a timeout, truncated output, failed page, missing CLI, or unsupported API.
   If unavailable, stop without changes; do not fall back to editing SQLite,
   JSONL files, or a partial recent-task list.
@@ -56,8 +80,18 @@ is needed. It lists only this local Codex home's indexed tasks, not cloud tasks.
 - Missing title/creation date is not permission to guess. Skip those tasks.
   Never replace an actual old title with a summary, first-message preview, or
   an invented label.
-- For many candidates, process compact batches. Do not dump long transcripts.
-  If output is truncated, retrieve smaller slices before making a proposal.
+- For many candidates, use `--offset N --limit N` for compact output and inspect
+  `outputComplete`, `outputTotal` and `nextOffset`. Omit slices for a single full
+  output when it fits. Every invocation enumerates again: slices are not a
+  stable snapshot. Preserve IDs and original metadata across slices, detect
+  duplicate/conflicting rows or count changes, and restart collection if needed.
+  Do not infer missing IDs or authorize an unseen remainder. If output is
+  truncated, obtain smaller intact slices before proposing any affected task.
+  For a complete candidate set, cover the reported output total with distinct
+  IDs and reach `nextOffset: null`; otherwise describe only the retrieved subset.
+- `--page-size` controls API pages (1..200, default 100), not output slicing.
+  `--summary-only` omits task rows and cannot support a rename proposal.
+  Do not dump long transcripts or mistake summary counts for candidate evidence.
 
 ## 2. Read only candidates and apply the fixed rules
 
