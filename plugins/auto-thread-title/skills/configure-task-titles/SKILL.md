@@ -27,6 +27,16 @@ or rename them. To investigate batch API compatibility, use `doctor --probe`;
 this generates and cleans up a temporary CLI schema without requesting task data.
 None of these checks proves desktop tool availability or rename permissions.
 
+The startup hook separately reads only the current task's metadata with
+`thread/read`, `includeTurns: false`. It validates identity, cwd and createdAt
+locally, computes the Shanghai date and skips already compliant titles. Normal
+operation injects a short policy and needs only one model-side title write;
+unavailable or not-yet-readable metadata falls back to the full verification
+policy, while identity or scope mismatches skip naming. It does not use or inject
+task bodies or previews. Doctor success does not prove metadata is visible at the
+first startup or that a desktop rename completed. Do not promise a fixed usage
+saving from fewer prompt characters or tool calls.
+
 For CLI discovery, explicit overrides take precedence; automatic discovery
 prefers Codex's managed `plugins/.plugin-appserver/codex` (`codex.exe` on Windows)
 over PATH. Do not replace it with an older PATH CLI just because that binary
@@ -96,10 +106,12 @@ state and diagnostic result. First-use hook trust still follows Codex's approval
 flow; do not bypass it. Only a new task with SessionStart source `startup` can
 trigger automatic naming; continuing an existing task does not retroactively
 trigger it. Once the first user request establishes a clear topic, the naming
-policy prioritizes the current task's title before business tool calls instead
-of waiting for the final answer. An unclear topic or unavailable naming tools
+policy prioritizes the current task's title before business tool calls, including
+sequential calls in the same batch, instead of waiting for the final answer.
+An unclear topic or unavailable naming tools
 means skip. If interrupted before the rename completes, the original title may
 remain; never resume an interrupted task just to finish naming it. Distinguish
 successful hook injection from a completed title write when reporting diagnostics.
-There is no polling or extra model turn, but project discovery may briefly start
-a bounded local subprocess. Do not trigger a real title change as a setup test.
+There is no polling, added MCP server or separate model task, but project
+discovery and metadata reads use bounded local subprocesses and RPCs. Do not
+trigger a real title change as a setup test.

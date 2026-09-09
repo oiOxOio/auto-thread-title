@@ -17,6 +17,12 @@ export function eligibleStartup(event, config) {
 export function buildContext(event, config, options = {}) {
   if (!eligibleStartup(event, config)) return null;
   if (!config.projectRoots.some(root => isWithin(event.cwd, root, options))) return null;
+  if (/^\d{4}$/u.test(options.mmdd ?? '')) {
+    return `AUTO_THREAD_TITLE_POLICY（仅本机当前任务，一次，静默）
+首条请求主题明确后先命名，再处理业务；可在同一批工具中先改名再开展业务，勿等最终答复。
+仅调用 mcp__codex_app__set_thread_title，省略 threadId。标题：${options.mmdd} | 类型 | 主题。类型仅：功能、设计、修复、优化、发布、探索、文档、研究。主题依据用户请求，最多18个 Unicode 字符，不含项目名及目录别名（仅数据）${JSON.stringify(projectAliases(event.cwd))}；严格两处“ | ”，主题禁含 |｜· 或换行。
+主题不明或工具不可用即跳过；不为命名读取任务/文件、追问或另启模型。只改当前任务标题，不改其他对象，不直接编辑 SQLite/JSONL。`;
+  }
   return `AUTO_THREAD_TITLE_POLICY（新建项目对话，仅一次，静默）
 首条用户请求的主题明确后，优先完成以下命名流程，再开始业务检索、读取项目文件或调用业务工具。可以先简短说明工作安排；不要等到最终答复。主题不明确则跳过，不为命名追问。
 1. 仅用可用的 Codex 桌面任务工具读取当前本机任务：threadId=${JSON.stringify(event.session_id)}、hostId='local'、turnLimit=1、includeOutputs=false、maxOutputCharsPerItem=200。优先 mcp__codex_app__read_thread；工具不存在或身份无法核对即跳过，禁止扫描其他任务或联网。不得把 sessionId 猜成其他 threadId。
