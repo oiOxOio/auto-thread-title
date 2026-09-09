@@ -15,6 +15,7 @@
 | 插件 | 能做什么 | 使用说明 |
 | --- | --- | --- |
 | `auto-thread-title` · 自动对话标题 | 首条请求主题明确后优先整理新任务标题；手动整理单个任务；预览确认后批量整理本机任务 | [查看说明](plugins/auto-thread-title/README.md) · [更新记录](plugins/auto-thread-title/CHANGELOG.md) |
+| `dream-loop-safe` · 安全视觉迭代 | 手动启动概念、实现、截图与评审流程；适用于 Blender / Three.js，默认最多三轮，无自动钩子 | [查看说明](plugins/dream-loop-safe/README.md) · [更新记录](plugins/dream-loop-safe/CHANGELOG.md) |
 
 目录只列出已经提供的插件。各插件的系统支持、作用范围、额度消耗及安全边界，请阅读对应说明后再安装。
 
@@ -84,6 +85,12 @@ codex plugin marketplace remove why-ping
 codex-plugins/
 ├── .agents/plugins/marketplace.json   # why-ping 市场目录
 ├── plugins/
+│   ├── dream-loop-safe/              # 中文纯技能插件，无运行时钩子
+│   │   ├── .codex-plugin/plugin.json
+│   │   ├── skills/dream-loop-safe/   # 技能、中文元数据与评审参考
+│   │   ├── tests/                    # 结构测试与实机验收清单
+│   │   ├── README.md
+│   │   └── SECURITY-NOTES.md
 │   └── auto-thread-title/
 │       ├── .codex-plugin/plugin.json # 独立插件清单
 │       ├── skills/                   # 手动调用的技能

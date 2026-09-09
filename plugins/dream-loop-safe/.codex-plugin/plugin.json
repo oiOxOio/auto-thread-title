@@ -1,0 +1,26 @@
+{
+  "name": "dream-loop-safe",
+  "version": "0.1.0",
+  "description": "中文安全视觉迭代：手动启动概念、实现、截图与评审，适用于 Blender、Three.js 和 WebGL；默认最多三轮，不包含自动钩子或 MCP 服务。",
+  "author": {
+    "name": "Why.Ping"
+  },
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "安全视觉迭代",
+    "shortDescription": "在明确权限与轮次预算内制作和改进 3D 视觉效果。",
+    "longDescription": "面向 Codex 的中文视觉工作流，保留概念图、Blender 建模、浏览器截图和视觉评审。只在用户明确调用时使用，默认最多三轮；不自动安装依赖、不递归启动 Agent、不自动提交或推送。安全规则属于行为约束，不替代系统沙箱。",
+    "developerName": "Why.Ping",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "使用 $dream-loop-safe 在当前项目制作一个 Three.js 暗黑奇幻场景，不下载外部素材，最多三轮。",
+      "使用 $dream-loop-safe 对照我提供的参考图改进当前页面，保留现有交互，不安装新依赖。",
+      "使用 $dream-loop-safe 改进当前 Blender 场景，先审查脚本和输出路径，再渲染与评审。"
+    ]
+  }
+}
