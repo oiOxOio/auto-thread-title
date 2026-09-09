@@ -12,3 +12,6 @@ venv/
 Thumbs.db
 auth.json
 hosts.yml
+
+# 市场发布的本地/CI 构建产物
+/dist/releases/
