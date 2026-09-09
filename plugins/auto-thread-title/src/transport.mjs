@@ -12,6 +12,7 @@ const MAX_STDERR_BYTES = 1024 * 1024;
 const MAX_SCHEMA_BYTES = 64 * 1024 * 1024;
 const ALLOWED_LIST_KEYS = new Set(['limit', 'sortKey', 'sortDirection', 'modelProviders', 'sourceKinds', 'archived', 'useStateDbOnly', 'cursor']);
 const ALLOWED_PROJECT_KEYS = new Set(['limit', 'cursor']);
+const STARTUP_THREAD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/u;
 
 function usableFile(file, platform) {
   try {
@@ -225,11 +226,22 @@ function validateProjectRequest(method, params) {
   }
 }
 
-export async function withAppServer(launch, callback, { timeoutMs = 30000, maxDurationMs = 120000, purpose = 'inventory', env = process.env } = {}) {
+function validateMetadataRequest(method, params, threadId) {
+  if (method !== 'thread/read' || !params || typeof params !== 'object' || Array.isArray(params)
+      || Object.keys(params).length !== 2 || !Object.hasOwn(params, 'threadId') || !Object.hasOwn(params, 'includeTurns')
+      || params.threadId !== threadId || params.includeTurns !== false) {
+    throw new Error('Only the bound startup task may be read with includeTurns explicitly false');
+  }
+}
+
+export async function withAppServer(launch, callback, { timeoutMs = 30000, maxDurationMs = 120000, purpose = 'inventory', threadId, env = process.env } = {}) {
   validateLaunch(launch);
   validTimeout(timeoutMs);
   validTimeout(maxDurationMs);
-  if (!['inventory', 'projects'].includes(purpose)) throw new Error('Invalid read-only app-server purpose');
+  if (!['inventory', 'projects', 'metadata'].includes(purpose)) throw new Error('Invalid read-only app-server purpose');
+  if (purpose === 'metadata' && (typeof threadId !== 'string' || !STARTUP_THREAD_ID.test(threadId))) {
+    throw new Error('Metadata reads require a valid bound startup task ID');
+  }
   if (typeof callback !== 'function') throw new Error('An inventory callback is required');
   const child = spawn(launch.file, [...launch.args, 'app-server', '--listen', 'stdio://'], {
     shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env,
@@ -238,6 +250,7 @@ export async function withAppServer(launch, callback, { timeoutMs = 30000, maxDu
   let fatalError;
   let pending;
   let sequence = 0;
+  let metadataReadSent = false;
   let totalBytes = 0;
   let stderrBytes = 0;
   let messageCount = 0;
@@ -302,7 +315,8 @@ export async function withAppServer(launch, callback, { timeoutMs = 30000, maxDu
     }
   });
   const send = (message) => {
-    if (!['initialize', 'initialized', purpose === 'projects' ? 'project/list' : 'thread/list'].includes(message.method)) throw new Error('Only read-only inventory methods are allowed');
+    const readMethod = purpose === 'projects' ? 'project/list' : purpose === 'metadata' ? 'thread/read' : 'thread/list';
+    if (!['initialize', 'initialized', readMethod].includes(message.method)) throw new Error('Only read-only inventory methods are allowed');
     child.stdin.write(`${JSON.stringify(message)}\n`);
   };
   const rpc = (method, params) => {
@@ -316,12 +330,20 @@ export async function withAppServer(launch, callback, { timeoutMs = 30000, maxDu
     });
   };
   const request = async (method, params) => {
+    if (purpose === 'metadata') {
+      validateMetadataRequest(method, params, threadId);
+      if (metadataReadSent) throw new Error('Only one startup metadata read is allowed per session');
+      metadataReadSent = true;
+      // Serialize only the validated bound identity, never caller-controlled
+      // getters, later mutations, or a custom params.toJSON implementation.
+      return rpc('thread/read', { threadId, includeTurns: false });
+    }
     (purpose === 'projects' ? validateProjectRequest : validateListRequest)(method, params);
     return rpc(method, params);
   };
   try {
     await rpc('initialize', {
-      clientInfo: { name: purpose === 'projects' ? 'auto_thread_title_projects' : 'auto_thread_title_inventory', version: '2.0.0' },
+      clientInfo: { name: `auto_thread_title_${purpose}`, version: '2.0.0' },
       ...(purpose === 'projects' ? { capabilities: { experimentalApi: true } } : {}),
     });
     send({ method: 'initialized', params: {} });

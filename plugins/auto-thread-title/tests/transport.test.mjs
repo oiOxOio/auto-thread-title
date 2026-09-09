@@ -242,3 +242,97 @@ test('project RPC incompatibility and timeout are sanitized and stop subprocesse
     assert.throws(() => process.kill(pid, 0), error => error.code === 'ESRCH');
   }
 });
+
+async function auditedMetadata(t, scenario = 'normal') {
+  const directory = await temporary(t);
+  const script = path.join(directory, 'metadata-server.mjs');
+  const audit = path.join(directory, 'metadata-audit.jsonl');
+  const pidFile = path.join(directory, 'metadata-pid.txt');
+  await writeFile(script, `
+import { appendFileSync, writeFileSync } from 'node:fs';
+import readline from 'node:readline';
+writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
+const scenario = ${JSON.stringify(scenario)};
+let ready = false;
+const send = message => process.stdout.write(JSON.stringify(message) + '\\n');
+readline.createInterface({ input: process.stdin, crlfDelay: Infinity }).on('line', line => {
+  const message = JSON.parse(line);
+  appendFileSync(${JSON.stringify(audit)}, JSON.stringify(message) + '\\n');
+  if (message.method === 'initialize') {
+    if (message.params.capabilities !== undefined) process.exit(41);
+    send({ id: message.id, result: { userAgent: 'synthetic-metadata' } });
+  } else if (message.method === 'initialized') ready = true;
+  else if (ready && message.method === 'thread/read') {
+    if (message.params.includeTurns !== false) process.exit(42);
+    if (scenario === 'timeout') return;
+    if (scenario === 'error') { send({ id: message.id, error: { message: 'synthetic-private-diagnostic' } }); return; }
+    if (scenario === 'malformed') { process.stdout.write('synthetic-private-diagnostic\\n'); return; }
+    send({ id: message.id, result: { thread: { id: message.params.threadId, createdAt: 1788933862,
+      name: 'synthetic-title', cwd: '/synthetic/project', source: 'vscode', turns: [] } } });
+  } else process.exit(43);
+});
+`);
+  return { spec: { file: process.execPath, args: [script] },
+    readAudit: async () => (await readFile(audit, 'utf8')).trim().split('\n').map(JSON.parse),
+    assertNotStarted: async () => assert.rejects(access(pidFile), error => error.code === 'ENOENT'),
+    assertStopped: async () => {
+      const pid = Number(await readFile(pidFile, 'utf8'));
+      assert.throws(() => process.kill(pid, 0), error => error.code === 'ESRCH');
+    } };
+}
+
+test('metadata purpose binds a valid startup task ID before launching a subprocess', async t => {
+  const child = await auditedMetadata(t);
+  for (const threadId of [undefined, null, '', 'short12', 'a'.repeat(129), '_1234567', 'thread/123', 'thread id', '线程123456', 'thread\n123']) {
+    await assert.rejects(withAppServer(child.spec, () => {}, { purpose: 'metadata', threadId }), /valid bound startup task ID/);
+  }
+  await child.assertNotStarted();
+  for (const threadId of ['a12345_-', 'a'.repeat(128)]) {
+    await withAppServer(child.spec, request => request('thread/read', { threadId, includeTurns: false }), { purpose: 'metadata', threadId });
+  }
+  await child.assertStopped();
+});
+
+test('metadata purpose sends only one exact read without experimental APIs or other task access', async t => {
+  const child = await auditedMetadata(t);
+  const threadId = 'synthetic-startup-123';
+  const readParams = { threadId, includeTurns: false };
+  const result = await withAppServer(child.spec, async request => {
+    for (const method of ['thread/list', 'project/list', 'thread/name/set', 'thread/metadata/update', 'thread/start',
+      'turn/start', 'thread/resume', 'thread/archive', 'thread/turns/list', 'initialize', 'initialized']) {
+      await assert.rejects(request(method, readParams), /Only the bound startup task/);
+    }
+    for (const invalid of [{ threadId }, { ...readParams, threadId: 'another-startup-456' }, { ...readParams, includeTurns: true },
+      { ...readParams, includeTurns: undefined }, { ...readParams, cursor: 'extra' }, { ...readParams, includeOutputs: false },
+      { includeTurns: false }, null, [], Object.create(readParams)]) {
+      await assert.rejects(request('thread/read', invalid), /Only the bound startup task/);
+    }
+    const valid = { ...readParams };
+    Object.defineProperty(valid, 'toJSON', { value: () => ({ threadId: 'another-startup-456', includeTurns: true }) });
+    const first = request('thread/read', valid);
+    await assert.rejects(request('thread/read', readParams), /Only one startup metadata read/);
+    const response = await first;
+    await assert.rejects(request('thread/read', readParams), /Only one startup metadata read/);
+    return response;
+  }, { purpose: 'metadata', threadId });
+  assert.equal(result.thread.id, threadId);
+  assert.equal(result.thread.createdAt, 1788933862);
+  assert.deepEqual(result.thread.turns, []);
+  const messages = await child.readAudit();
+  assert.deepEqual(messages.map(message => message.method), ['initialize', 'initialized', 'thread/read']);
+  assert.equal(messages[0].params.capabilities, undefined);
+  assert.deepEqual(messages[2].params, readParams);
+  await child.assertStopped();
+});
+
+test('metadata rejection and timeout stay sanitized and terminate the subprocess', async t => {
+  for (const scenario of ['error', 'malformed', 'timeout']) {
+    const child = await auditedMetadata(t, scenario);
+    const threadId = 'synthetic-startup-123';
+    await assert.rejects(withAppServer(child.spec, request => request('thread/read', { threadId, includeTurns: false }), {
+      purpose: 'metadata', threadId, timeoutMs: 400,
+    }), error => !error.message.includes('synthetic-private'));
+    assert.deepEqual((await child.readAudit()).map(message => message.method), ['initialize', 'initialized', 'thread/read']);
+    await child.assertStopped();
+  }
+});

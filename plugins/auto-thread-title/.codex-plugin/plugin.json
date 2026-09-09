@@ -1,6 +1,6 @@
 {
   "name": "auto-thread-title",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Cross-platform local task titles: diagnose and configure automatic scope, rename one linked task, or preview and confirm a title-only batch. Node.js 22+, no Python or npm dependencies.",
   "author": {
     "name": "Why.Ping"

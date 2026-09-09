@@ -4,6 +4,7 @@ import { loadConfig, saveConfig, nativeAbsolute, isWithin } from './config.mjs';
 import { buildContext, eligibleStartup } from './policy.mjs';
 import { discoverProjectRoots, matchesSavedProject } from './projects.mjs';
 import { resolveProjectCodex } from './project-runtime.mjs';
+import { readStartupMetadata } from './startup-metadata.mjs';
 import { collectTasks } from './inventory.mjs';
 import { resolveCodex, probeCapabilities, withAppServer } from './transport.mjs';
 
@@ -80,6 +81,7 @@ async function main() {
   const executable = options['--codex'] || process.env.AUTO_THREAD_TITLE_CODEX || config.codexPath;
   const getLaunch = () => resolveProjectCodex({ executable });
   if (options.command === 'hook') {
+    const startedAt = Date.now();
     const event = await readEvent();
     // Ineligible events must not read project metadata or start any subprocess.
     if (!eligibleStartup(event, config) || !nativeAbsolute(event.cwd)) return;
@@ -89,7 +91,11 @@ async function main() {
       if (!await matchesSavedProject(event.cwd, roots)) return;
       effective = { ...config, projectRoots: [event.cwd] };
     }
-    const context = buildContext(event, effective);
+    // Match manual scope before the optional metadata subprocess as well.
+    if (!effective.projectRoots.some(root => isWithin(event.cwd, root))) return;
+    const metadata = await readStartupMetadata(event, { getLaunch, startedAt });
+    if (metadata.status === 'skip') return;
+    const context = buildContext(event, effective, metadata.status === 'ready' ? { mmdd: metadata.mmdd } : {});
     if (context) emit({ continue: true, hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: context } });
     return;
   }

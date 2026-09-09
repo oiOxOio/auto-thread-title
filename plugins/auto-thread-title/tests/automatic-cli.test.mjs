@@ -27,6 +27,77 @@ function fixture(t) {
   return { root, project, other, config, registry, marker, executable, event, env, run, saveProjects };
 }
 
+function metadataServer(f) {
+  const responseFile = path.join(f.root, 'metadata-response.json');
+  const thread = { id: f.event.session_id, cwd: f.project, source: 'vscode', ephemeral: false,
+    name: null, createdAt: Date.parse('2026-09-08T16:00:00Z') / 1000, turns: [], preview: 'PRIVATE-PREVIEW' };
+  fs.writeFileSync(f.executable, `
+import fs from 'node:fs';
+import readline from 'node:readline';
+readline.createInterface({input:process.stdin,crlfDelay:Infinity}).on('line', line => {
+  const m = JSON.parse(line);
+  fs.appendFileSync(${JSON.stringify(f.marker)}, JSON.stringify(m) + '\\n');
+  const send = value => process.stdout.write(JSON.stringify({id:m.id,...value})+'\\n');
+  if (m.method === 'initialize') send({result:{userAgent:'synthetic'}});
+  else if (m.method === 'initialized') {}
+  else if (m.method === 'thread/read') {
+    const response = JSON.parse(fs.readFileSync(${JSON.stringify(responseFile)}, 'utf8'));
+    if (response.hang) return;
+    send(response);
+  } else process.exit(9);
+});
+`);
+  const respond = response => fs.writeFileSync(responseFile, JSON.stringify(response));
+  respond({ result: { thread } });
+  return { thread, respond, audit: () => fs.readFileSync(f.marker, 'utf8').trim().split('\n').map(JSON.parse) };
+}
+
+test('normal startup reads only current metadata, emits a lean policy, and supports manual scope', t => {
+  const f = fixture(t), server = metadataServer(f);
+  f.saveProjects([f.project]);
+  for (const manual of [false, true]) {
+    if (manual) {
+      fs.mkdirSync(path.dirname(f.config));
+      fs.writeFileSync(f.config, JSON.stringify({ scope: 'manual', projectRoots: [f.project] }));
+    }
+    const result = f.run(['hook'], f.event);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stderr, '');
+    const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+    assert.match(context, /0909 \| 类型 \| 主题/u);
+    assert.match(context, /省略 threadId/u);
+    assert.doesNotMatch(context, /read_thread|PRIVATE-PREVIEW|synthetic-startup-123/u);
+  }
+  const audit = server.audit();
+  assert.deepEqual(audit.map(m => m.method), ['initialize', 'initialized', 'thread/read', 'initialize', 'initialized', 'thread/read']);
+  assert.equal(audit[0].params.capabilities, undefined);
+  assert.deepEqual(audit[2].params, { threadId: f.event.session_id, includeTurns: false });
+  // The extra preflight cannot run outside either scope.
+  assert.equal(f.run(['hook'], { ...f.event, cwd: f.other }).stdout, '');
+  assert.equal(server.audit().length, 6);
+});
+
+test('formatted titles and identity mismatches emit no context while transient unavailability falls back', t => {
+  const f = fixture(t), server = metadataServer(f);
+  f.saveProjects([f.project]);
+  for (const change of [{ name: '0909 | 优化 | 内存占用' }, { id: 'different-thread-123' }, { cwd: f.other }]) {
+    server.respond({ result: { thread: { ...server.thread, ...change } } });
+    const result = f.run(['hook'], f.event);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, '');
+  }
+  for (const response of [{ error: { code: -32601, message: 'PRIVATE-SERVER-ERROR' } }, { hang: true }]) {
+    server.respond(response);
+    const result = f.run(['hook'], f.event);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(JSON.parse(result.stdout).hookSpecificOutput.additionalContext, /read_thread/u);
+    assert.doesNotMatch(result.stdout + result.stderr, /PRIVATE/u);
+  }
+  server.respond({ result: { thread: server.thread } });
+  assert.doesNotMatch(JSON.parse(f.run(['hook'], f.event).stdout).hookSpecificOutput.additionalContext, /read_thread/u);
+  assert.equal(fs.existsSync(f.config), false);
+});
+
 test('fresh installation follows additions/removals of saved project roots without writing config', t => {
   const f = fixture(t);
   f.saveProjects([f.other, f.project]);
@@ -34,13 +105,14 @@ test('fresh installation follows additions/removals of saved project roots witho
   assert.equal(first.status, 0, first.stderr);
   assert.equal(JSON.parse(first.stdout).hookSpecificOutput.hookEventName, 'SessionStart');
   assert.equal(fs.existsSync(f.config), false);
-  assert.equal(fs.existsSync(f.marker), false);
+  // This fixture simulates an older CLI; metadata failure keeps the full policy.
+  assert.equal(fs.existsSync(f.marker), true);
   f.saveProjects([f.other]);
   assert.equal(f.run(['hook'], f.event).stdout, '');
   f.saveProjects([f.project]);
   assert.ok(f.run(['hook'], f.event).stdout);
   assert.equal(fs.existsSync(f.config), false);
-  assert.equal(fs.existsSync(f.marker), false);
+  assert.equal(fs.existsSync(f.marker), true);
 });
 
 test('disabled, resumed and invalid startup events do not query projects', t => {
@@ -110,7 +182,7 @@ input.on('line', line => {
   const result = f.run(['hook'], f.event);
   assert.equal(result.status, 0, result.stderr);
   assert.ok(result.stdout, result.stderr);
-  assert.deepEqual(fs.readFileSync(f.marker, 'utf8').trim().split('\n'), ['initialize', 'initialized', 'project/list']);
+  assert.deepEqual(fs.readFileSync(f.marker, 'utf8').trim().split('\n'), ['initialize', 'initialized', 'project/list', 'initialize']);
   installServer([f.other]);
   assert.equal(f.run(['hook'], f.event).stdout, '');
   // API failure after migration must not reactivate the stale scope.
