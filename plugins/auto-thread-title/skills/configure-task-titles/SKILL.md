@@ -95,6 +95,11 @@ projects mode, or `doctor` for manual mode. Summarize the saved scope, enabled
 state and diagnostic result. First-use hook trust still follows Codex's approval
 flow; do not bypass it. Only a new task with SessionStart source `startup` can
 trigger automatic naming; continuing an existing task does not retroactively
-trigger it. There is no polling or extra model turn, but project discovery may
-briefly start a bounded local subprocess. Do not trigger a real title change as a
-setup test.
+trigger it. Once the first user request establishes a clear topic, the naming
+policy prioritizes the current task's title before business tool calls instead
+of waiting for the final answer. An unclear topic or unavailable naming tools
+means skip. If interrupted before the rename completes, the original title may
+remain; never resume an interrupted task just to finish naming it. Distinguish
+successful hook injection from a completed title write when reporting diagnostics.
+There is no polling or extra model turn, but project discovery may briefly start
+a bounded local subprocess. Do not trigger a real title change as a setup test.

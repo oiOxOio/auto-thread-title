@@ -110,7 +110,17 @@ test('real Node CLI handles configured UTF8 BOM hook without invoking Codex', t 
   const run = input => spawnSync(process.execPath, [CLI, 'hook'], { env, input, encoding: 'utf8', timeout: 5000 });
   const result = run('\uFEFF' + JSON.stringify({ ...event, cwd: project }));
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(JSON.parse(result.stdout).hookSpecificOutput.hookEventName, 'SessionStart');
+  const output = JSON.parse(result.stdout).hookSpecificOutput;
+  assert.equal(output.hookEventName, 'SessionStart');
+  // A startup turn may be interrupted before a final answer. Naming must be
+  // scheduled ahead of project work in the actual CLI-emitted instruction.
+  const context = output.additionalContext;
+  assert.match(context, /首条用户请求的主题明确后，优先完成以下命名流程，再开始业务检索、读取项目文件或调用业务工具/u);
+  assert.match(context, /不要等到最终答复/u);
+  assert.doesNotMatch(context, /本轮最终答复前/u);
+  assert.match(context, /主题不明确则跳过，不为命名追问/u);
+  assert.match(context, /只改当前任务标题/u);
+  assert.match(context, /原名合规则跳过/u);
   assert.equal(run('{invalid').stdout, '');
   assert.equal(run(JSON.stringify({ ...event, cwd: root })).stdout, '');
   assert.equal(fs.readFileSync(filename, 'utf8'), before);

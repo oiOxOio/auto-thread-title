@@ -14,7 +14,7 @@
 
 | 插件 | 能做什么 | 使用说明 |
 | --- | --- | --- |
-| `auto-thread-title` · 自动对话标题 | 自动整理新任务标题；手动整理单个任务；预览确认后批量整理本机任务 | [查看说明](plugins/auto-thread-title/README.md) |
+| `auto-thread-title` · 自动对话标题 | 首条请求主题明确后优先整理新任务标题；手动整理单个任务；预览确认后批量整理本机任务 | [查看说明](plugins/auto-thread-title/README.md) · [更新记录](plugins/auto-thread-title/CHANGELOG.md) |
 
 目录只列出已经提供的插件。各插件的系统支持、作用范围、额度消耗及安全边界，请阅读对应说明后再安装。
 
@@ -53,6 +53,8 @@ codex plugin add auto-thread-title@why-ping
 
 其他插件将第二行替换为对应的 `<插件名>@why-ping`。刷新市场目录不代表所有已安装插件都已更新；完成后在新任务中验证。
 
+正式发布使用简洁的语义化版本号，例如标题插件的 `0.2.0`：修复递增末位，新增兼容功能递增中间位。各插件独立维护版本和更新记录；时间戳后缀仅用于可选的本地开发迭代。
+
 ### 查看当前来源
 
 ```powershell
@@ -90,7 +92,8 @@ codex-plugins/
 │       ├── src/                      # 跨平台 Node.js 实现
 │       ├── tests/                    # 插件测试
 │       ├── config.json               # 安全默认配置（用户配置独立保存）
-│       └── README.md                 # 使用说明
+│       ├── README.md                 # 使用说明
+│       └── CHANGELOG.md              # 正式版本更新记录
 ├── CONTRIBUTING.md                   # 新增插件、验证与发布
 └── README.md                         # 市场总览与安装入口
 ```
