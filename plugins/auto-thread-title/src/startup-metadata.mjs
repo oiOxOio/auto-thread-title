@@ -11,7 +11,7 @@ export function classifyStartupMetadata(event, response, pathOptions = {}) {
   // An explicit identity/scope mismatch must never cause a model-side retry.
   if (thread.id !== event.session_id || !nativeAbsolute(thread.cwd, pathOptions)
       || !isWithin(thread.cwd, event.cwd, pathOptions) || !isWithin(event.cwd, thread.cwd, pathOptions)
-      || thread.ephemeral === true || thread.parentThreadId != null
+      || thread.ephemeral === true || thread.parentThreadId != null || thread.agentRole || thread.agentNickname
       || (thread.source !== undefined && !SOURCE_KINDS.includes(thread.source))) return { status: 'skip' };
   const mmdd = shanghaiMmdd(thread.createdAt);
   if (!mmdd || thread.ephemeral !== false || typeof thread.source !== 'string'

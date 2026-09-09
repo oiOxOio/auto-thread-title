@@ -29,7 +29,7 @@ test('already formatted titles skip; wrong date, format, type, length or project
 test('explicit identity, directory, ephemeral and subagent mismatches skip without model retry', () => {
   for (const change of [{ id: 'different-thread-123' }, { cwd: '/projects/demo-mixing/sub' },
     { cwd: '/projects' }, { cwd: '/projects/demo-other' }, { cwd: 'relative' },
-    { ephemeral: true }, { parentThreadId: 'parent-thread-123' },
+    { ephemeral: true }, { parentThreadId: 'parent-thread-123' }, { agentRole: 'worker' }, { agentNickname: 'Scout' },
     { source: { subAgent: { thread_spawn: {} } } }, { source: 'remote' }]) {
     assert.deepEqual(classify(change), { status: 'skip' });
   }
