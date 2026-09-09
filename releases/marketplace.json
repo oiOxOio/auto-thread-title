@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "tag": "marketplace-2026.09.09",
+  "title": "Why Ping 插件市场 · 2026.09.09",
+  "summary": [
+    "将仓库发布入口调整为多插件市场总览，完整列出所有已注册插件的独立版本与安装方式。",
+    "纳入自动对话标题 0.2.1 与安全视觉迭代 0.1.0；保留历史单插件标签，不改插件代码或版本。",
+    "增加完整市场包、独立插件包、版本清单和 SHA-256 校验；Latest 由市场快照承担。"
+  ],
+  "validation": {
+    "auto-thread-title": {
+      "command": ["node", "--test"],
+      "scope": "合成数据单元、策略和进程测试；不执行真实任务改名。",
+      "runtime": "未执行真实 Codex 桌面安装、钩子信任和改名验收。"
+    },
+    "dream-loop-safe": {
+      "command": ["node", "--test"],
+      "scope": "静态包结构、元数据、链接与策略文本防回退测试。",
+      "runtime": "未执行真实 Codex 安装、模型行为对抗测试或 Blender 渲染。"
+    }
+  }
+}

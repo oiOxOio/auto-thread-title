@@ -19,9 +19,19 @@
 
 目录只列出已经提供的插件。各插件的系统支持、作用范围、额度消耗及安全边界，请阅读对应说明后再安装。
 
+## 市场发布与版本下载
+
+[查看最新市场快照](https://github.com/oiOxOio/codex-plugins/releases/latest) · [全部发布与历史版本](https://github.com/oiOxOio/codex-plugins/releases) · [多插件发布规范](RELEASING.md)
+
+仓库的 **Latest 是完整市场总览**，同时列出全部已注册插件及其独立版本，不再用某一个插件的版本代表整个仓库。市场快照采用 `marketplace-YYYY.MM.DD` 标签；单插件继续使用 `<插件名>-v<版本>`，历史标签不移动。
+
+市场 Release 提供完整市场包、各插件独立包、版本清单与 SHA-256 校验。默认安装命令跟随所配置市场来源；需要复现某个 Release 时，使用该页面给出的完整 commit SHA，并在独立 `CODEX_HOME` 中验收。发布说明会区分自动化测试和未完成的实机验证。
+
+新增插件或准备下一次发布时，更新 [发布计划](releases/marketplace.json)。发布工作流从市场目录自动收录所有插件，先通过六项平台/Node 组合验证，再发布缺少的独立版本并更新市场 Latest；普通代码提交不会自动发布。详见 [RELEASING.md](RELEASING.md)。
+
 ## 快速开始
 
-需要支持 `codex plugin` 命令的 Codex CLI；使用桌面任务工具的插件还需要 Codex 桌面端。依赖按插件分别安装：当前标题插件的自动钩子和批量清单使用 Node.js 22+，不需要 Python 或 `npm install`；手动单任务只依赖桌面任务工具。
+需要支持 `codex plugin` 命令的 Codex CLI；使用桌面任务工具的插件还需要 Codex 桌面端。依赖按插件分别安装：当前标题插件的自动钩子和批量清单使用 Node.js 22+，不需要 Python 或 `npm install`；手动单任务只依赖桌面任务工具。安全视觉迭代是纯技能插件，Blender、项目运行时和截图工具按具体任务选用，不会随安装自动下载。
 
 先添加远程市场：
 
@@ -29,10 +39,11 @@
 codex plugin marketplace add https://github.com/oiOxOio/codex-plugins.git
 ```
 
-再安装需要的插件，例如：
+再按需选择插件安装，不必全部安装：
 
 ```powershell
 codex plugin add auto-thread-title@why-ping
+codex plugin add dream-loop-safe@why-ping
 ```
 
 添加市场与安装插件是两件事。本市场按需提供插件，不会因为添加市场就批量安装所有插件；以后也可从 `why-ping` 选择其他插件。
@@ -101,6 +112,9 @@ codex-plugins/
 │       ├── config.json               # 安全默认配置（用户配置独立保存）
 │       ├── README.md                 # 使用说明
 │       └── CHANGELOG.md              # 正式版本更新记录
+├── releases/marketplace.json         # 明确的市场发布计划
+├── scripts/release_marketplace.py    # 维护端发布与归档工具
+├── RELEASING.md                      # 聚合市场与单插件两层发布规范
 ├── CONTRIBUTING.md                   # 新增插件、验证与发布
 └── README.md                         # 市场总览与安装入口
 ```

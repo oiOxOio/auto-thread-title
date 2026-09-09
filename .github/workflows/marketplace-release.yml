@@ -1,0 +1,83 @@
+name: Marketplace release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'releases/marketplace.json'
+  pull_request:
+    paths:
+      - '.agents/plugins/marketplace.json'
+      - 'plugins/**'
+      - 'releases/**'
+      - 'scripts/release_marketplace.py'
+      - 'tests/release/**'
+      - '.github/workflows/marketplace-release.yml'
+      - 'RELEASING.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: '1'
+  PYTHONIOENCODING: utf-8
+
+concurrency:
+  group: why-ping-marketplace-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify / ${{ matrix.os }} / Node.js ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Validate every marketplace entry
+        run: python scripts/release_marketplace.py check
+      - name: Release pipeline regression tests (synthetic, no network)
+        run: python -m unittest discover -s tests/release -p "test_*.py" -v
+      - name: Test all registered plugins
+        run: python scripts/release_marketplace.py test-plugins
+      - name: Verify committed-source archives and manifest
+        run: python scripts/release_marketplace.py build --commit "${{ github.sha }}"
+
+  publish:
+    name: Publish marketplace and independent plugin releases
+    needs: verify
+    if: github.repository == 'oiOxOio/codex-plugins' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Publish tested immutable snapshot and verify Latest
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: python scripts/release_marketplace.py publish --commit "$RELEASE_SHA"
