@@ -19,12 +19,19 @@ Run the platform launcher with `doctor`:
 
 The launchers honor an explicit `AUTO_THREAD_TITLE_NODE`, the available Codex
 runtime, PATH and standard install locations. They never install software or
-source user profiles. `doctor` checks runtime, config scope and CLI discovery;
-it does not read tasks or prove desktop tool availability. To investigate batch
-API compatibility, use `doctor --probe`; this generates a temporary CLI schema,
-then cleans it up, without requesting task data. Discover desktop task tools
-separately when needed; absence is an environment limitation, not permission to
-edit SQLite/JSONL or change accounts/homes.
+source user profiles. `doctor` checks runtime, config and CLI discovery without
+starting the CLI; in projects mode, `automaticScopeReady: null` means the project
+scope has not been checked. Use `doctor --projects` to read local project metadata
+and check whether the current working directory matches. It does not read tasks
+or rename them. To investigate batch API compatibility, use `doctor --probe`;
+this generates and cleans up a temporary CLI schema without requesting task data.
+None of these checks proves desktop tool availability or rename permissions.
+
+For CLI discovery, explicit overrides take precedence; automatic discovery
+prefers Codex's managed `plugins/.plugin-appserver/codex` (`codex.exe` on Windows)
+over PATH. Do not replace it with an older PATH CLI just because that binary
+launches successfully. Discover desktop task tools separately when needed;
+absence does not authorize editing SQLite/JSONL or changing accounts/homes.
 
 If a runtime is missing, explain the requirement and the explicit executable
 override. Do not install software, change machine PATH, edit shell profiles,
@@ -33,22 +40,40 @@ permission or signing restrictions and explain the blocker.
 
 ## Save only explicitly requested settings
 
-Automatic mode starts with an empty `projectRoots` allowlist. It needs an explicit
-directory configuration; it never guesses all projects from a home folder.
-If asked only to diagnose, do not configure anything. If the user asks to enable
-or change the scope but has not identified directories, ask for the intended
-directories before writing. Do not infer authorization for `/`, an entire drive,
-a home directory, or all tasks from a request for cross-platform support.
+The default `scope: "projects"` follows projects saved in the local Codex home.
+Every new-task startup refreshes all roots, so project additions, removals and
+moves require no separate plugin setting. It matches actual paths and linked Git
+worktrees, not sidebar names. Each OS reads its own project list; do not copy or
+translate drive letters or enumerate other machines.
+
+Migrated project registries must use read-only paginated `project/list`; only
+unmigrated legacy environments may use `local-projects[].rootPaths`. Do not use
+stale `saved-workspace-roots`. The bundled helper applies bounded subprocess and
+pagination limits; discovery failure skips automatic naming without broadening
+the scope. Do not repair it by directly changing Codex's project registry.
+
+If asked only to diagnose, do not configure anything. A request to follow saved
+projects or enable automatic project discovery authorizes
+`--scope projects --enable` without asking for directories. If the user only
+wants to toggle an existing setup, preserve its scope. For a requested manual range, use their
+specified directories; ask only if the intended manual directories cannot be
+determined from the conversation. Do not infer `/`, an entire drive, a home
+directory, or all tasks as the manual scope.
 
 Use the same launcher with:
 
-- `configure --project-root "<absolute-existing-directory>" --enable`
+- `configure --scope projects --enable` follows saved local Codex projects.
+- `configure --scope manual` returns to the saved manual root list.
+- `configure --project-root "<absolute-existing-directory>" --enable` sets manual
+  roots and enables automatic naming within them.
 - Repeat `--project-root` for multiple directories. This **replaces** the entire
-  automatic allowlist. For an addition use `--add-project-root` instead: it
+  manual list. For an addition use `--add-project-root` instead: it
   preserves existing roots (including temporarily unmounted or other-OS paths)
-  and the current enabled state. Do not combine the two root flags or implicitly
-  enable a previously disabled plugin when only adding a directory.
-- `configure --disable` disables only automatic naming, not manual skills.
+  and the current enabled state. Both root flags select manual scope without
+  implicitly enabling it. Do not combine the root flags with each other or with
+  `--scope projects`.
+- `configure --enable` / `configure --disable` toggles automatic naming while
+  preserving the scope; manual skills are unaffected.
 - `configure --codex "<absolute-executable>"` saves a CLI selection when requested.
 
 Settings are stored outside the installation: `AUTO_THREAD_TITLE_CONFIG` when
@@ -57,9 +82,19 @@ or `~/.codex` if unset. Use the `configPath` returned by doctor; do not switch
 Codex homes or read authentication files. The command writes only this plugin's
 config. Never patch the installed plugin cache, marketplace or Codex config.toml.
 
-Keep the shared title rule fixed: Asia/Shanghai, MMDD | 类型 | 主题, at most 18
-Unicode code points. Manual batches do not inherit the automatic root allowlist.
+When upgrading, user config with explicit `projectRoots` but no `scope` stays in
+manual mode, including an empty list; `enabled: false` stays disabled. Only switch
+these choices when the user requests it. The default projects mode applies when
+there is no existing manual root configuration.
 
-After a successful configuration write, run `doctor` once, summarize exactly
-what changed, and explain that automatic hook definitions must be trusted and
-tested in a new task. Do not trigger any real title change as a setup test.
+Keep the shared title rule fixed: Asia/Shanghai, MMDD | 类型 | 主题, at most 18
+Unicode code points for the topic. Manual batches do not inherit automatic scope.
+
+After a successful configuration write, run `doctor --projects` once when checking
+projects mode, or `doctor` for manual mode. Summarize the saved scope, enabled
+state and diagnostic result. First-use hook trust still follows Codex's approval
+flow; do not bypass it. Only a new task with SessionStart source `startup` can
+trigger automatic naming; continuing an existing task does not retroactively
+trigger it. There is no polling or extra model turn, but project discovery may
+briefly start a bounded local subprocess. Do not trigger a real title change as a
+setup test.

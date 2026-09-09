@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 
 export const PLUGIN_ROOT = fileURLToPath(new URL('../', import.meta.url));
-const KEYS = new Set(['enabled', 'projectRoots', 'timezone', 'topicMaxLength', 'codexPath']);
+const KEYS = new Set(['enabled', 'scope', 'projectRoots', 'timezone', 'topicMaxLength', 'codexPath']);
 const controls = /[\x00-\x1f\x7f]/u;
 export function windowsAbsolute(value) {
   return /^[A-Za-z]:[\\/]/u.test(value) || /^\\\\[^\\/]+[\\/][^\\/]+/u.test(value);
@@ -46,6 +46,7 @@ export function validateConfig(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Config must be a JSON object.');
   if (Object.keys(value).some(key => !KEYS.has(key))) throw new Error('Unknown config field; check the documented config schema.');
   if (typeof value.enabled !== 'boolean') throw new Error('enabled must be a boolean.');
+  if (value.scope !== undefined && !['projects', 'manual'].includes(value.scope)) throw new Error('scope must be projects or manual.');
   if (!Array.isArray(value.projectRoots) || value.projectRoots.some(root =>
     typeof root !== 'string' || !root.trim() || controls.test(root) ||
     !(windowsAbsolute(root) || root.startsWith('/') || root === '~' || root.startsWith('~/') || root.startsWith('~\\')))) {
@@ -87,7 +88,11 @@ export function loadConfig(options = {}) {
   try { fs.lstatSync(filename); custom = readJson(filename); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (!custom || typeof custom !== 'object' || Array.isArray(custom)) throw new Error('Config must be a JSON object.');
-  const config = validateConfig({ ...defaults, ...custom });
+  // Preserve an explicit legacy allowlist, including an intentionally empty one.
+  // Only installations without a user-selected scope adopt saved projects.
+  const legacyScope = !Object.hasOwn(custom, 'scope') && Object.hasOwn(custom, 'projectRoots')
+    ? { scope: 'manual' } : {};
+  const config = validateConfig({ ...defaults, ...custom, ...legacyScope });
   return { config, filename, customized: Object.keys(custom).length > 0 };
 }
 

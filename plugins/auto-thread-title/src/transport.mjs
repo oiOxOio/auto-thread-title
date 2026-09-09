@@ -11,6 +11,7 @@ const MAX_STDOUT_BYTES = 256 * 1024 * 1024;
 const MAX_STDERR_BYTES = 1024 * 1024;
 const MAX_SCHEMA_BYTES = 64 * 1024 * 1024;
 const ALLOWED_LIST_KEYS = new Set(['limit', 'sortKey', 'sortDirection', 'modelProviders', 'sourceKinds', 'archived', 'useStateDbOnly', 'cursor']);
+const ALLOWED_PROJECT_KEYS = new Set(['limit', 'cursor']);
 
 function usableFile(file, platform) {
   try {
@@ -214,13 +215,24 @@ function validateListRequest(method, params) {
   }
 }
 
-export async function withAppServer(launch, callback, { timeoutMs = 30000, maxDurationMs = 120000 } = {}) {
+function validateProjectRequest(method, params) {
+  if (method !== 'project/list' || !params || typeof params !== 'object' || Array.isArray(params)
+      || Object.keys(params).some((key) => !ALLOWED_PROJECT_KEYS.has(key))
+      || !Number.isSafeInteger(params.limit) || params.limit < 1 || params.limit > 100
+      || (Object.hasOwn(params, 'cursor') && (typeof params.cursor !== 'string' || !params.cursor
+        || params.cursor.length > 16384 || /[\x00-\x1f\x7f]/u.test(params.cursor)))) {
+    throw new Error('Only bounded, read-only saved-project listing requests are allowed');
+  }
+}
+
+export async function withAppServer(launch, callback, { timeoutMs = 30000, maxDurationMs = 120000, purpose = 'inventory', env = process.env } = {}) {
   validateLaunch(launch);
   validTimeout(timeoutMs);
   validTimeout(maxDurationMs);
+  if (!['inventory', 'projects'].includes(purpose)) throw new Error('Invalid read-only app-server purpose');
   if (typeof callback !== 'function') throw new Error('An inventory callback is required');
   const child = spawn(launch.file, [...launch.args, 'app-server', '--listen', 'stdio://'], {
-    shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
+    shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env,
   });
   let closing = false;
   let fatalError;
@@ -290,7 +302,7 @@ export async function withAppServer(launch, callback, { timeoutMs = 30000, maxDu
     }
   });
   const send = (message) => {
-    if (!['initialize', 'initialized', 'thread/list'].includes(message.method)) throw new Error('Only read-only inventory methods are allowed');
+    if (!['initialize', 'initialized', purpose === 'projects' ? 'project/list' : 'thread/list'].includes(message.method)) throw new Error('Only read-only inventory methods are allowed');
     child.stdin.write(`${JSON.stringify(message)}\n`);
   };
   const rpc = (method, params) => {
@@ -303,9 +315,15 @@ export async function withAppServer(launch, callback, { timeoutMs = 30000, maxDu
       catch { fail('Local app-server request could not be sent'); }
     });
   };
-  const request = async (method, params) => { validateListRequest(method, params); return rpc(method, params); };
+  const request = async (method, params) => {
+    (purpose === 'projects' ? validateProjectRequest : validateListRequest)(method, params);
+    return rpc(method, params);
+  };
   try {
-    await rpc('initialize', { clientInfo: { name: 'auto_thread_title_inventory', version: '2.0.0' } });
+    await rpc('initialize', {
+      clientInfo: { name: purpose === 'projects' ? 'auto_thread_title_projects' : 'auto_thread_title_inventory', version: '2.0.0' },
+      ...(purpose === 'projects' ? { capabilities: { experimentalApi: true } } : {}),
+    });
     send({ method: 'initialized', params: {} });
     return await Promise.race([Promise.resolve().then(() => callback(request)), failure]);
   } finally {

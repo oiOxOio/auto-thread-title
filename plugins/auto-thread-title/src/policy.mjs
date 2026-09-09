@@ -8,9 +8,14 @@ export function projectAliases(cwd) {
   return [...new Set([name, name.replace(/-mixing$/iu, '')].filter(Boolean))];
 }
 
-export function buildContext(event, config, options = {}) {
+export function eligibleStartup(event, config) {
   if (!event || event.hook_event_name !== 'SessionStart' || event.source !== 'startup' || !config.enabled) return null;
   if (typeof event.session_id !== 'string' || !SESSION_ID.test(event.session_id) || typeof event.cwd !== 'string') return null;
+  return true;
+}
+
+export function buildContext(event, config, options = {}) {
+  if (!eligibleStartup(event, config)) return null;
   if (!config.projectRoots.some(root => isWithin(event.cwd, root, options))) return null;
   return `AUTO_THREAD_TITLE_POLICY（新建项目对话，仅一次，静默）
 本轮最终答复前：

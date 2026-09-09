@@ -204,3 +204,41 @@ test('invalid launch specifications and direct shell wrappers are rejected befor
   await assert.rejects(withAppServer({ file: 'codex.cmd', args: [] }, () => {}), /Shell wrappers/);
   await assert.rejects(probeCapabilities({ file: 'codex', args: ['\0'] }), /Invalid CLI/);
 });
+
+const projectFixture = fileURLToPath(new URL('./fixtures/fake-project-codex.mjs', import.meta.url));
+test('project RPC purpose permits only bounded project/list with experimental handshake', async (t) => {
+  const directory = await temporary(t);
+  const audit = path.join(directory, 'project-audit.jsonl');
+  const spec = { file: process.execPath, args: [projectFixture, '--audit', audit] };
+  await withAppServer(spec, async request => {
+    for (const method of ['thread/list', 'thread/read', 'thread/name/set', 'project/create', 'project/update', 'project/delete', 'initialize']) {
+      await assert.rejects(request(method, {}), /Only bounded/);
+    }
+    for (const changes of [{ limit: 0 }, { limit: 101 }, { cursor: '' }, { cursor: '\n' }, { cwd: '/outside' }, { archived: true }]) {
+      await assert.rejects(request('project/list', { limit: 100, ...changes }), /Only bounded/);
+    }
+    assert.equal((await request('project/list', { limit: 100 })).data.length, 1);
+  }, { purpose: 'projects' });
+  const messages = (await readFile(audit, 'utf8')).trim().split('\n').map(JSON.parse);
+  assert.deepEqual(messages.map(message => message.method), ['initialize', 'initialized', 'project/list']);
+  assert.equal(messages[0].params.capabilities.experimentalApi, true);
+});
+
+test('default task inventory denies project/list and does not enable experimental APIs', async (t) => {
+  const child = await audited(t);
+  await withAppServer(child.spec, request => assert.rejects(request('project/list', { limit: 100 }), /Only bounded/));
+  assert.equal((await child.readAudit())[0].params.capabilities, undefined);
+});
+
+test('project RPC incompatibility and timeout are sanitized and stop subprocesses', async (t) => {
+  for (const scenario of ['incompatible', 'malformed', 'timeout']) {
+    const directory = await temporary(t);
+    const pidFile = path.join(directory, 'project-pid.txt');
+    const spec = { file: process.execPath, args: [projectFixture, '--scenario', scenario, '--pid-file', pidFile] };
+    await assert.rejects(withAppServer(spec, request => request('project/list', { limit: 100 }), {
+      purpose: 'projects', timeoutMs: 400,
+    }), error => !error.message.includes('synthetic-private'));
+    const pid = Number(await readFile(pidFile, 'utf8'));
+    assert.throws(() => process.kill(pid, 0), error => error.code === 'ESRCH');
+  }
+});

@@ -1,5 +1,6 @@
 {
   "enabled": true,
+  "scope": "projects",
   "projectRoots": [],
   "timezone": "Asia/Shanghai",
   "topicMaxLength": 18

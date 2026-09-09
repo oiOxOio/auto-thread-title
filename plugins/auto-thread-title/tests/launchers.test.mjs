@@ -13,7 +13,7 @@ const powerShell = isWindows ? 'powershell.exe' : 'pwsh';
 // Never silently skip Windows coverage because a busy CI worker starts slowly.
 const hasPowerShell = isWindows || spawnSync(powerShell, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { timeout: 5000 }).status === 0;
 
-function fixture(t) {
+function fixture(t, { includeCli = true } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), "auto-title launch 中文 $;()' "));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(path.join(root, 'scripts'));
@@ -21,7 +21,7 @@ function fixture(t) {
   for (const file of ['run.sh', 'run.ps1']) {
     copyFileSync(path.join(pluginRoot, 'scripts', file), path.join(root, 'scripts', file));
   }
-  writeFileSync(path.join(root, 'src', 'cli.mjs'), `
+  if (includeCli) writeFileSync(path.join(root, 'src', 'cli.mjs'), `
 import { readFileSync } from 'node:fs';
 const args = process.argv.slice(2);
 if (args[0] === 'exit') process.exit(Number(args[1]));
@@ -96,8 +96,7 @@ for (const [shell, available] of [['sh', !isWindows], ['powershell', hasPowerShe
   });
 
   test(`${shell}: reports incomplete installation without running CLI`, { skip: !available }, t => {
-    const f = fixture(t);
-    rmSync(path.join(f.root, 'src', 'cli.mjs'));
+    const f = fixture(t, { includeCli: false });
     const manual = invoke(f, shell, ['doctor']);
     assert.equal(manual.status, 1);
     assert.match(manual.stderr, /Missing src\/cli.mjs/);
