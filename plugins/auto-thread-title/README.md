@@ -22,22 +22,22 @@ codex plugin add auto-thread-title@why-ping
 | 功能 | 必要环境 |
 | --- | --- |
 | 手动单个任务 | Codex 桌面端的 `read_thread` / `set_thread_title` 工具；不需要 Node.js |
-| 自动新任务 | Node.js 22+、已启用并信任的 SessionStart 钩子、明确配置的项目目录，以及桌面任务工具 |
+| 自动新任务 | Node.js 22+、已启用并信任的 SessionStart 钩子、本机 Codex 已保存的项目，以及桌面任务工具；也支持手动指定目录 |
 | 手动批量 | Node.js 22+、同一本机任务存储的 Codex CLI，以及桌面任务工具 |
 
-批量入口会先检查**本机已安装 CLI** 的 schema，要求 App Server 支持 `thread/list` 的归档筛选、用户来源筛选、游标分页和 `useStateDbOnly`。桌面端已安装不代表 PATH 中有可用 CLI；较旧 CLI 可能需要更新。启动器不会自动安装软件、切换账号或更改企业执行策略。
+批量入口会先检查**本机已安装 CLI** 的 schema，要求 App Server 支持 `thread/list` 的归档筛选、用户来源筛选、游标分页和 `useStateDbOnly`。自动项目范围在已迁移的项目注册表环境中需要支持 `project/list` 的 App Server。CLI 自动发现优先使用 Codex 桌面端维护的 `plugins/.plugin-appserver/codex`（Windows 为 `codex.exe`），再考虑 PATH；显式 CLI 覆盖优先。较旧 CLI 可能需要更新，启动器不会自动安装软件、切换账号或更改企业执行策略。
 
 安装后新建一个任务，让 Codex 载入技能。插件内的 `hooks/hooks.json` 会被发现，不需要复制到用户配置；首次使用自动钩子时需在 Codex CLI 的 `/hooks` 中审核并信任，钩子定义变化后可能需要重新审核。[Codex 钩子说明](https://learn.chatgpt.com/docs/hooks)
 
 ### 统一入口与环境检查
 
-优先在 Codex 中使用设置技能，不必手动定位脚本。例如（路径替换为自己的真实项目目录）：
+默认自动范围跟随 Codex 保存的本机项目。优先在 Codex 中使用设置技能，不必手动定位脚本；旧手动配置需要切换时可以说：
 
 ```text
-使用 $configure-task-titles，检查当前环境，并将 /Users/alice/project 配置为自动标题的项目目录。
+使用 $configure-task-titles，启用自动标题，并让范围自动跟随本机 Codex 保存的项目。
 ```
 
-只想诊断、不修改配置时，明确说“使用 `$configure-task-titles` 仅检查当前环境”。设置技能会读取现有配置，区分新增目录与替换目录；执行结果不代表已完成真实改名验收。
+只想诊断、不修改配置时，明确说“使用 `$configure-task-titles` 仅检查当前环境和自动项目范围”。设置技能会读取现有配置，自动模式无需选择目录，手动模式区分新增目录与替换目录；执行结果不代表已完成真实改名验收。
 
 需要命令行时，以下 `<插件目录>` 指实际安装的 `auto-thread-title` 目录，不是技能子目录；从 `codex plugin list --json` 核对已安装来源和路径，替换占位符。请在实际运行钩子/技能的 Codex 环境检查，终端 PATH 正常不代表桌面进程的 PATH 相同。
 
@@ -45,6 +45,7 @@ macOS / Linux：
 
 ```sh
 sh "<插件目录>/scripts/run.sh" doctor
+sh "<插件目录>/scripts/run.sh" doctor --projects
 sh "<插件目录>/scripts/run.sh" doctor --probe
 ```
 
@@ -52,17 +53,18 @@ Windows（PowerShell）：
 
 ```powershell
 powershell -NoProfile -File "<插件目录>\scripts\run.ps1" doctor
+powershell -NoProfile -File "<插件目录>\scripts\run.ps1" doctor --projects
 powershell -NoProfile -File "<插件目录>\scripts\run.ps1" doctor --probe
 ```
 
-`doctor` 检查 Node、配置、项目目录可访问性和 CLI 位置；`--probe` 额外运行 CLI 的 schema 生成命令，使用并清理临时 schema，不读取任务。它不会验证桌面工具或改名权限。自动目录为空时 `automaticScopeReady: false` 是安全默认状态，并不妨碍手动整理；缺少 CLI 会使诊断返回非零，但不表示手动单任务不可用。
+`doctor` 检查 Node、配置和 CLI 位置，不启动 CLI；projects 模式尚未读取项目列表时，`automaticScopeReady` 为 `null`，不能据此判断范围已就绪。`--projects` 额外只读获取本机项目元数据，核对实际范围和当前工作目录是否匹配，不读取任务或修改标题。`--probe` 额外运行 CLI 的 schema 生成命令，使用并清理临时 schema，不读取任务。这些检查不会验证桌面工具或改名权限；缺少 CLI 会使诊断返回非零，但不表示手动单任务不可用。
 
 启动器依次尝试显式 `AUTO_THREAD_TITLE_NODE`、Codex 已提供的 `CODEX_PRIMARY_RUNTIME_NODE`、PATH 的 `node`，然后检查常见安装位置。不加载 shell profile，不安装包，也不修改 PATH；显式覆盖无效时停止，不偷偷换另一个程序。
 
 | 覆盖项 | 用途 |
 | --- | --- |
 | `AUTO_THREAD_TITLE_NODE` | 启动器使用的 Node.js 22+ 可执行文件绝对路径 |
-| `AUTO_THREAD_TITLE_CODEX` | 批量清单/诊断使用的 Codex CLI 路径；建议绝对路径 |
+| `AUTO_THREAD_TITLE_CODEX` | 自动项目发现、批量清单和诊断使用的 Codex CLI 路径；建议绝对路径 |
 | `--codex "<CLI绝对路径>"` | 本次 `doctor` / `inventory` 覆盖，优先于环境变量及保存配置 |
 | `configure --codex "<CLI绝对路径>"` | 将 CLI 路径保存到用户配置，避免每次输入 |
 | `AUTO_THREAD_TITLE_CONFIG` | 显式指定用户配置文件绝对路径 |
@@ -88,41 +90,48 @@ MMDD | 类型 | 主题
 
 | 方式 | 入口 | 范围与写入条件 |
 | --- | --- | --- |
-| 自动新任务 | 启用并信任插件钩子后触发 | 配置目录下的新任务，在首轮运行中最多整理一次 |
+| 自动新任务 | 启用并信任插件钩子后触发 | 本机 Codex 已保存项目（默认）或手动范围内的新任务，在首轮运行中最多整理一次 |
 | 手动单个 | `$rename-task-title` | 用户提供一个任务链接，只处理这个任务 |
 | 手动全部 | `$rename-all-task-titles` | 读取完整本机清单，先预览、确认后改名 |
 
 ### 自动整理新任务
 
-仅在 `SessionStart` 的来源为 `startup`，且项目目录位于配置的根目录下时触发；恢复旧任务不会触发。只读取当前任务，不扫描其他任务，不轮询。
+仅在 `SessionStart` 的来源为 `startup`，且任务实际目录匹配自动范围时触发；恢复旧任务、继续对话或更改范围不会补触发旧任务。命名只读取当前任务，不扫描其他任务，不轮询。
 
-默认 [config.json](config.json) 的 `projectRoots` 是 `[]`：自动模式不会处理任何任务，需配置一次自己的项目根目录。不会猜测用户名、扫描所有磁盘或默认扩大到整个用户目录。示例路径必须替换为本机已存在、可访问的目录：
+默认 [config.json](config.json) 使用 `scope: "projects"`，每次新任务启动时读取**本机 Codex 保存的项目及其全部根目录**。在 Codex 中新增、移除或迁移项目后，后续新任务自动使用最新范围，无需同步一份插件目录清单。匹配实际目录及其子目录，也支持已保存 Git 仓库的 linked worktree；项目显示名称不参与路径匹配。
+
+切换到 macOS 或 Linux 后，插件读取那台机器的项目列表，不转换或复制 Windows 盘符。每台机器仍需安装依赖并按 Codex 提示信任钩子，插件不会绕过首次信任。未匹配已保存项目的目录不在默认范围内；项目列表读取失败时跳过并提供诊断，不会扩大到所有任务。
+
+已迁移到新项目注册表的 Codex 通过只读、分页的 `project/list` 提供范围；未迁移的旧环境读取 `local-projects[].rootPaths`。不使用可能已经过时的 `saved-workspace-roots`。获取项目列表可能短暂启动本机 App Server 子进程，设有超时和分页上限，不请求额外模型回合。
+
+全新安装无需额外设置范围。若已有手动配置，希望改为跟随项目，执行：
 
 macOS / Linux：
 
 ```sh
-sh "<插件目录>/scripts/run.sh" configure --project-root "$HOME/project" --enable
+sh "<插件目录>/scripts/run.sh" configure --scope projects --enable
 ```
 
 Windows：
 
 ```powershell
-powershell -NoProfile -File "<插件目录>\scripts\run.ps1" configure --project-root "S:\project" --enable
+powershell -NoProfile -File "<插件目录>\scripts\run.ps1" configure --scope projects --enable
 ```
 
-可在同一条命令重复 `--project-root` 配置多个根目录。每次传入这些选项会**替换整份目录列表**，不是追加。需要保留已有目录时，改用可重复的 `--add-project-root`，例如：
+需要只覆盖自选目录时，可切换为 `scope: "manual"`。`configure --scope manual` 使用已保存的手动列表；`--project-root` 和 `--add-project-root` 也会自动切换为 manual，且不会隐式启用已停用的自动标题。以下示例路径必须替换为本机已存在、可访问的目录：
 
 ```sh
+sh "<插件目录>/scripts/run.sh" configure --project-root "$HOME/project" --enable
 sh "<插件目录>/scripts/run.sh" configure --add-project-root "$HOME/another-project"
 ```
 
-Windows 同样在 PowerShell 启动器后使用 `configure --add-project-root "D:\another-project"`。追加模式只验证新增目录，保留旧目录及启停状态；原有目录暂未挂载或属于另一系统也不会阻止添加。两个目录选项不能混用。`--enable` / `--disable` 只切换自动模式，不影响手动技能。
+Windows 同样在 PowerShell 启动器后使用 `configure --project-root "S:\project" --enable` 或 `configure --add-project-root "D:\another-project"`。可重复 `--project-root`，每次会**替换整份手动目录列表**；可重复 `--add-project-root`，只验证新增目录，保留旧目录及启停状态。原有目录暂未挂载或属于另一系统也不会阻止添加。两个目录选项不能混用，也不能与 `--scope projects` 同用。手动列表为空时不会处理任务；`--enable` / `--disable` 只切换自动标题的启停，不影响手动技能。
 
-支持本机绝对路径和 `~/`；拒绝普通相对路径。作用域比较使用平台原生路径及两端的真实路径，不会把 `project-old` 当成 `project` 子目录；指向根目录外的符号链接不会扩大作用域。
+手动目录支持本机绝对路径和 `~/`，拒绝普通相对路径。作用域比较使用平台原生路径及两端的真实路径，不会把 `project-old` 当成 `project` 子目录；指向根目录外的符号链接不会扩大手动作用域。
 
 `configure` 将配置保存在 `AUTO_THREAD_TITLE_CONFIG` 指定的文件，未指定时使用既有 `CODEX_HOME` 下的 `auto-thread-title/config.json`，再无则使用用户主目录下 `.codex/auto-thread-title/config.json`。它不修改 `CODEX_HOME` 环境变量，也不修改插件安装缓存。钩子和清单只读取配置；只有显式 `configure` 写入配置。
 
-从 Python 旧版升级时，原先默认的 Windows 项目目录**不会自动迁移**。Windows 用户若仍希望该范围生效，运行上面的 Windows 配置命令；其他平台配置自己的目录。不要把整个 Codex 用户配置跨账号复制，不要编辑下载缓存作为长期设置。
+升级保留已有选择：用户配置显式包含 `projectRoots`、但没有 `scope` 时，按 manual 处理，包括空列表；`enabled: false` 仍保持停用。没有用户手动目录配置时采用 projects 默认值。旧版内置的 Windows 默认目录不会复制到其他系统；需要从已有手动范围切换时使用 `configure --scope projects --enable`。不要把整个 Codex 用户配置跨账号复制，不要编辑下载缓存作为长期设置。
 
 ### 手动整理单个任务
 
@@ -142,7 +151,7 @@ Windows 同样在 PowerShell 启动器后使用 `configure --add-project-root "D
 使用 $rename-all-task-titles 整理本机全部 Codex 任务标题。
 ```
 
-可以进一步限定“只整理某个项目”。默认范围包含当前 CLI 所用本机 Codex home 中所有已入库的用户任务：各项目、无项目、置顶和归档任务；不包含其他主机、ChatGPT 云端对话或子代理临时任务。CLI 与桌面端必须对应同一任务存储，不切换账号或扫描其他 home。手动模式不受自动模式的 `projectRoots` 限制。
+可以进一步限定“只整理某个项目”。默认范围包含当前 CLI 所用本机 Codex home 中所有已入库的用户任务：各项目、无项目、置顶和归档任务；不包含其他主机、ChatGPT 云端对话或子代理临时任务。CLI 与桌面端必须对应同一任务存储，不切换账号或扫描其他 home。手动技能不受自动范围的 scope 或 projectRoots 限制。
 
 执行流程：
 

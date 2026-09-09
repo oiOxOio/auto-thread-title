@@ -38,7 +38,7 @@ codex plugin add auto-thread-title@why-ping
 
 安装后新建一个 Codex 任务使用。包含钩子的插件还需按 Codex 提示审核；发现插件内的钩子文件不等于自动信任它们。[钩子与信任说明](https://learn.chatgpt.com/docs/hooks)
 
-标题插件不再绑定 Windows 固定盘符，默认自动目录为空；需要按[插件说明](plugins/auto-thread-title/README.md#自动整理新任务)显式配置自己的项目目录。Windows、macOS 和 Linux 共用同一份核心实现；平台 CI 和桌面实机验收的范围见插件说明，不把源码兼容性当成所有环境已经验证。
+标题插件默认跟随本机 Codex 中保存的项目，不必另行维护目录：新增、移除或迁移项目后，新任务启动时自动获取当前范围。切换到 macOS 或 Linux 时读取该机器的项目列表，不沿用 Windows 盘符；也可切换为手动目录范围。已有手动配置和停用状态保留，详见[插件说明](plugins/auto-thread-title/README.md#自动整理新任务)。Windows、macOS 和 Linux 共用同一份核心实现；平台 CI 和桌面实机验收的范围见插件说明，不把源码兼容性当成所有环境已经验证。
 
 ## 更新与卸载
 

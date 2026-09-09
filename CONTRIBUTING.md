@@ -89,10 +89,13 @@ node --test
 
 标题插件的补充验收：
 
-- POSIX 大小写、Windows 盘符/UNC、中文和空格路径、符号链接作用域边界。
-- 配置替换与追加分开验证：追加只验证新目录，保留离线或其他平台的旧目录及启停状态；拒绝混用替换/追加选项。
+- POSIX 大小写、Windows 盘符/UNC、中文和空格路径、符号链接作用域边界，以及 Git linked worktree 对已保存项目的匹配。
+- 默认 `scope: "projects"` 在每次 startup 读取当前本机项目列表；验证项目新增、删除、迁移、多根目录、分页上限和读取失败时跳过，不能回退到陈旧的 saved-workspace-roots。
+- 已迁移的项目注册表通过只读 `project/list` 获取；只有未迁移的旧环境可读取 `local-projects[].rootPaths`。验证桌面维护的 CLI 优先于 PATH、显式 CLI 覆盖优先于自动发现。
+- 旧配置显式带有 `projectRoots` 且没有 `scope` 时保留手动模式；`enabled: false` 不被升级或目录追加隐式启用。切换到 projects 不要求提供目录。
+- 手动配置替换与追加分开验证：目录选项自动切到 manual，追加只验证新目录，保留离线或其他平台的旧目录及启停状态；拒绝混用替换/追加，以及 projects 与目录选项。
 - 原生启动器、UTF-8/BOM 标准输入、解释器缺失、进程退出与超时；Windows 运行 PowerShell 启动器，不设置执行策略绕过。
-- `doctor` 只检查环境；`doctor --probe` 验证已安装 CLI 的 schema，不能用新版本在线文档替代本机能力检查。
+- `doctor` 只检查环境且不启动 CLI；projects 未检查时 `automaticScopeReady` 为 `null`。`doctor --projects` 只读核对项目元数据及当前目录匹配，不读取任务或改名；`doctor --probe` 验证已安装 CLI 的 schema，不能用新版本在线文档替代本机能力检查。
 - 批量分页、活动/归档范围、输出分片、冲突检测和只读 RPC 白名单；预览确认规则不能被性能优化削弱。
 - 手动实机检查在隔离测试任务上进行，改名必须明确获批。CI 通过不等于完成真实桌面改名验收。
 

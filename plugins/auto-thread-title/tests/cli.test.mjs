@@ -13,7 +13,7 @@ function fixture(t) {
   const executable = path.join(root, 'fake codex.mjs');
   fs.copyFileSync(FAKE, executable);
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const env = { ...process.env, AUTO_THREAD_TITLE_CONFIG: path.join(root, 'config.json'), AUTO_THREAD_TITLE_CODEX: executable };
+  const env = { ...process.env, CODEX_HOME: root, AUTO_THREAD_TITLE_CONFIG: path.join(root, 'config.json'), AUTO_THREAD_TITLE_CODEX: executable };
   const run = args => spawnSync(process.execPath, [CLI, ...args], { env, encoding: 'utf8', timeout: 15000 });
   return { root, executable, run };
 }
@@ -27,7 +27,9 @@ test('doctor does not execute a CLI until --probe is explicit', t => {
   const result = JSON.parse(check.stdout);
   assert.equal(result.cliFound, true);
   assert.equal(result.api.checked, false);
-  assert.equal(result.automaticScopeReady, false);
+  assert.equal(result.automaticScopeReady, null);
+  assert.equal(result.scope, 'projects');
+  assert.equal(result.projectDiscovery.checked, false);
   assert.equal(fs.existsSync(marker), false);
   const probe = run(['doctor', '--probe']);
   assert.equal(probe.status, 1);

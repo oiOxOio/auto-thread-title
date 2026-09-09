@@ -72,7 +72,7 @@ test('automatic hook emits only for explicitly configured startup sessions', () 
 test('config rejects typo fields, dangerous ambiguity and inconsistent title policies', () => {
   for (const change of [{ enabled: 1 }, { projectRoots: ['relative'] }, { projectRoots: [null] },
     { projectRoots: ['/Users/alice\nRULES'] }, { projectRoots: 'all' }, { timezone: 'UTC' },
-    { topicMaxLength: 30 }, { codexPath: 'codex' }, { unknown: true }]) {
+    { topicMaxLength: 30 }, { codexPath: 'codex' }, { scope: 'all' }, { unknown: true }]) {
     assert.throws(() => validateConfig({ ...config, ...change }));
   }
   assert.deepEqual(validateConfig(config), config);
@@ -90,6 +90,7 @@ test('config changes are explicit, BOM is accepted, invalid config is not silent
   const root = temporary(t), filename = path.join(root, 'settings', 'config.json');
   const options = { env: { AUTO_THREAD_TITLE_CONFIG: filename } };
   assert.deepEqual(loadConfig(options).config.projectRoots, []);
+  assert.equal(loadConfig(options).config.scope, 'projects');
   assert.equal(fs.existsSync(filename), false);
   saveConfig({ ...config, projectRoots: [root] }, options);
   assert.deepEqual(loadConfig(options).config.projectRoots, [root]);
@@ -135,7 +136,41 @@ test('adding roots preserves inaccessible/other-OS roots and disabled state', t 
   saveConfig(original, { env });
   const result = spawnSync(process.execPath, [CLI, 'configure', '--add-project-root', root], { env, encoding: 'utf8', timeout: 5000 });
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(loadConfig({ env }).config, { ...original, projectRoots: [...original.projectRoots, fs.realpathSync.native(root)] });
+  assert.deepEqual(loadConfig({ env }).config, { ...original, scope: 'manual', projectRoots: [...original.projectRoots, fs.realpathSync.native(root)] });
   const ambiguous = spawnSync(process.execPath, [CLI, 'configure', '--project-root', root, '--add-project-root', root], { env, encoding: 'utf8', timeout: 5000 });
   assert.equal(ambiguous.status, 1);
+});
+
+test('legacy custom ranges including empty ranges preserve the manual scope and disabled state', t => {
+  const root = temporary(t), filename = path.join(root, 'config.json');
+  for (const projectRoots of [[], [root]]) {
+    fs.writeFileSync(filename, JSON.stringify({ enabled: false, projectRoots }));
+    const loaded = loadConfig({ env: { AUTO_THREAD_TITLE_CONFIG: filename } }).config;
+    assert.equal(loaded.scope, 'manual');
+    assert.equal(loaded.enabled, false);
+    assert.deepEqual(loaded.projectRoots, projectRoots);
+  }
+  fs.writeFileSync(filename, JSON.stringify({ enabled: false }));
+  assert.equal(loadConfig({ env: { AUTO_THREAD_TITLE_CONFIG: filename } }).config.scope, 'projects');
+  assert.equal(loadConfig({ env: { AUTO_THREAD_TITLE_CONFIG: filename } }).config.enabled, false);
+});
+
+test('scope switches preserve stored roots and require an explicit enable', t => {
+  const root = temporary(t), filename = path.join(root, 'config.json');
+  const env = { ...process.env, AUTO_THREAD_TITLE_CONFIG: filename, CODEX_HOME: root };
+  const run = args => spawnSync(process.execPath, [CLI, 'configure', ...args], { env, encoding: 'utf8', timeout: 5000 });
+  fs.writeFileSync(filename, JSON.stringify({ enabled: false, projectRoots: [root] }));
+  assert.equal(run(['--scope', 'projects']).status, 0);
+  assert.equal(loadConfig({ env }).config.enabled, false);
+  assert.equal(loadConfig({ env }).config.scope, 'projects');
+  assert.deepEqual(loadConfig({ env }).config.projectRoots, [root]);
+  assert.equal(run(['--scope', 'projects', '--enable']).status, 0);
+  assert.equal(loadConfig({ env }).config.enabled, true);
+  assert.equal(run(['--add-project-root', root]).status, 0);
+  assert.equal(loadConfig({ env }).config.scope, 'manual');
+  const before = fs.readFileSync(filename, 'utf8');
+  for (const args of [['--scope', 'all'], ['--scope', 'projects', '--project-root', root], ['--scope', 'projects', '--add-project-root', root]]) {
+    assert.equal(run(args).status, 1);
+    assert.equal(fs.readFileSync(filename, 'utf8'), before);
+  }
 });

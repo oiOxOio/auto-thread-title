@@ -1,4 +1,4 @@
 interface:
   display_name: "配置与诊断自动标题"
-  short_description: "跨平台检查运行环境、设置自动项目范围与启停，不修改任何任务标题。"
-  default_prompt: "使用 $configure-task-titles 检查自动标题插件，并帮我配置需要自动整理的项目目录。"
+  short_description: "跨平台检查运行环境，让自动范围跟随 Codex 项目或使用手动目录，并设置启停。"
+  default_prompt: "使用 $configure-task-titles 检查自动标题插件，并启用跟随本机 Codex 保存项目的自动范围。"

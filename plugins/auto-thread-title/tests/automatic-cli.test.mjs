@@ -1,0 +1,137 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { resolveProjectCodex } from '../src/project-runtime.mjs';
+
+const CLI = fileURLToPath(new URL('../src/cli.mjs', import.meta.url));
+function fixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'title automatic 项目 '));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, 'actual-project'), other = path.join(root, 'unrelated');
+  fs.mkdirSync(project); fs.mkdirSync(other);
+  const registry = path.join(root, '.codex-global-state.json');
+  const config = path.join(root, 'auto-thread-title', 'config.json');
+  const marker = path.join(root, 'cli-started');
+  const executable = path.join(root, 'codex.mjs');
+  fs.writeFileSync(executable, `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(marker)}, 'unexpected'); process.exit(2);`);
+  const env = { ...process.env, CODEX_HOME: root, AUTO_THREAD_TITLE_CONFIG: config, AUTO_THREAD_TITLE_CODEX: executable };
+  const event = { hook_event_name: 'SessionStart', source: 'startup', session_id: 'synthetic-startup-123', cwd: project };
+  const run = (args, input) => spawnSync(process.execPath, [CLI, ...args], {
+    env, input: input === undefined ? undefined : JSON.stringify(input), encoding: 'utf8', timeout: 15000,
+  });
+  const saveProjects = roots => fs.writeFileSync(registry, JSON.stringify({ 'local-projects': { example: { rootPaths: roots } } }));
+  return { root, project, other, config, registry, marker, executable, event, env, run, saveProjects };
+}
+
+test('fresh installation follows additions/removals of saved project roots without writing config', t => {
+  const f = fixture(t);
+  f.saveProjects([f.other, f.project]);
+  const first = f.run(['hook'], f.event);
+  assert.equal(first.status, 0, first.stderr);
+  assert.equal(JSON.parse(first.stdout).hookSpecificOutput.hookEventName, 'SessionStart');
+  assert.equal(fs.existsSync(f.config), false);
+  assert.equal(fs.existsSync(f.marker), false);
+  f.saveProjects([f.other]);
+  assert.equal(f.run(['hook'], f.event).stdout, '');
+  f.saveProjects([f.project]);
+  assert.ok(f.run(['hook'], f.event).stdout);
+  assert.equal(fs.existsSync(f.config), false);
+  assert.equal(fs.existsSync(f.marker), false);
+});
+
+test('disabled, resumed and invalid startup events do not query projects', t => {
+  const f = fixture(t);
+  fs.writeFileSync(f.registry, '{broken-registry');
+  for (const event of [{ ...f.event, source: 'resume' }, { ...f.event, source: 'compact' },
+    { ...f.event, hook_event_name: 'UserPromptSubmit' }, { ...f.event, session_id: 'bad' }, { ...f.event, cwd: 'relative' }]) {
+    const result = f.run(['hook'], event);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, '');
+  }
+  fs.mkdirSync(path.dirname(f.config));
+  fs.writeFileSync(f.config, JSON.stringify({ enabled: false }));
+  assert.equal(f.run(['hook'], f.event).stderr, '');
+  assert.equal(fs.existsSync(f.marker), false);
+});
+
+test('project doctor checks only saved project metadata and exposes current-directory mismatch', t => {
+  const f = fixture(t);
+  f.saveProjects([f.project]);
+  const result = f.run(['doctor', '--projects']);
+  assert.equal(result.status, 0, result.stderr);
+  const status = JSON.parse(result.stdout);
+  assert.equal(status.scope, 'projects');
+  assert.equal(status.automaticScopeReady, true);
+  assert.equal(status.projectDiscovery.projectCount, 1);
+  assert.equal(status.projectDiscovery.rootCount, 1);
+  assert.equal(status.projectDiscovery.currentDirectoryMatched, false);
+  assert.equal(result.stdout.includes(f.project), false);
+  assert.equal(fs.existsSync(f.marker), false);
+});
+
+test('unreadable automatic source stays quiet on stdout with an actionable sanitized diagnostic', t => {
+  const f = fixture(t);
+  fs.writeFileSync(f.registry, '{synthetic-private-registry');
+  const result = f.run(['hook'], f.event);
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, '');
+  assert.ok(result.stderr.length);
+  assert.equal(result.stderr.includes('synthetic-private-registry'), false);
+  assert.equal(fs.existsSync(f.marker), false);
+});
+
+test('migrated installations use current project RPC and never stale desktop roots', t => {
+  const f = fixture(t);
+  fs.writeFileSync(f.registry, JSON.stringify({
+    'local-projects': { stale: { rootPaths: [f.other] } },
+    'app-server-projects-migration-by-host': { [`local:${f.root}`]: { projectsMigrated: true } },
+  }));
+  const installServer = roots => fs.writeFileSync(f.executable, `
+import fs from 'node:fs';
+import readline from 'node:readline';
+const input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+input.on('line', line => {
+  const m = JSON.parse(line);
+  fs.appendFileSync(${JSON.stringify(f.marker)}, m.method + '\\n');
+  const send = result => process.stdout.write(JSON.stringify({id:m.id,result})+'\\n');
+  if (m.method === 'initialize') {
+    if (m.params.capabilities?.experimentalApi !== true) process.exit(4);
+    send({userAgent:'synthetic'});
+  } else if (m.method === 'initialized') {} else if (m.method === 'project/list') {
+    send({data:[{id:'current',roots:${JSON.stringify(roots.map(root => ({ path: root })))} }],nextCursor:null});
+  } else process.exit(5);
+});
+`);
+  installServer([f.project]);
+  const result = f.run(['hook'], f.event);
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(result.stdout, result.stderr);
+  assert.deepEqual(fs.readFileSync(f.marker, 'utf8').trim().split('\n'), ['initialize', 'initialized', 'project/list']);
+  installServer([f.other]);
+  assert.equal(f.run(['hook'], f.event).stdout, '');
+  // API failure after migration must not reactivate the stale scope.
+  fs.writeFileSync(f.executable, 'process.exit(2);');
+  const rejected = f.run(['hook'], { ...f.event, cwd: f.other });
+  assert.equal(rejected.stdout, '');
+  assert.ok(rejected.stderr);
+  assert.equal(fs.existsSync(f.config), false);
+});
+
+test('project runtime prefers the desktop copy and respects explicit overrides and Codex homes', t => {
+  const f = fixture(t);
+  const desktopDir = path.join(f.root, 'plugins', '.plugin-appserver');
+  fs.mkdirSync(desktopDir, { recursive: true });
+  const desktop = path.join(desktopDir, process.platform === 'win32' ? 'codex.exe' : 'codex');
+  fs.writeFileSync(desktop, 'synthetic executable never run', { mode: 0o700 });
+  const env = { CODEX_HOME: f.root, PATH: '' };
+  assert.equal(resolveProjectCodex({ env }).file, desktop);
+  assert.deepEqual(resolveProjectCodex({ env, executable: f.executable }), { file: process.execPath, args: [fs.realpathSync(f.executable)] });
+  assert.deepEqual(resolveProjectCodex({ env: { ...env, AUTO_THREAD_TITLE_CODEX: f.executable } }), { file: process.execPath, args: [fs.realpathSync(f.executable)] });
+  assert.throws(() => resolveProjectCodex({ env, executable: path.join(f.root, 'missing') }));
+  assert.throws(() => resolveProjectCodex({ env: { CODEX_HOME: 'relative' } }));
+  assert.throws(() => resolveProjectCodex({ env: { CODEX_HOME: path.join(f.root, 'different-home'), PATH: '' } }));
+});
